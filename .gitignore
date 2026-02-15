@@ -83,6 +83,9 @@ profile_default/
 ipython_config.py
 
 *.pem
+aes_key.bin
+stego_seed.bin
+user_signature.png
 
 # pyenv
 #   For a library or package, you might want to ignore these files since the code is
@@ -171,11 +174,7 @@ dmypy.json
 cython_debug/
 
 # PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+.idea/
 
 # Abstra
 # Abstra is an AI-powered process automation framework.
@@ -207,3 +206,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Generated archive output
+generated_archive/
+
+# Gemini / AI agent
+.gemini/
