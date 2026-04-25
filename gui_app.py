@@ -66,8 +66,8 @@ class ProtectionApp:
 
         # Template selection
         ttk.Label(main_container, text="Виберіть шаблон документа:", style="Subheader.TLabel").pack(pady=(10, 5), anchor="w")
-        self.template_var = tk.StringVar(value="Certificate of Achievement")
-        templates = ["Certificate of Achievement", "Application Form", "Contract for Education"]
+        self.template_var = tk.StringVar(value="Cyberverse Certificate")
+        templates = ["Cyberverse Certificate", "Certificate of Achievement", "Application Form", "Contract for Education"]
         self.template_menu = ttk.Combobox(main_container, textvariable=self.template_var, values=templates, state="readonly", font=("Segoe UI", 10))
         self.template_menu.pack(pady=5, fill="x")
         self.template_menu.bind("<<ComboboxSelected>>", self.on_template_change)
@@ -201,11 +201,13 @@ class ProtectionApp:
             self.add_field("Загальна вартість (грн)", "entry")
             self.add_field("Варіанти оплати", "combobox", ["щомісячно", "півроку"])
 
-        else:
-            # Traditional fields for other templates
-            self.add_field("ПІБ", "entry")
-            self.add_field("Номер ID", "entry")
-            self.add_field("Дата видачі", "date")
+        elif template == "Cyberverse Certificate":
+            self.add_field("Прізвище", "entry")
+            self.add_field("Ім'я", "entry")
+            self.add_field("По батькові", "entry")
+            self.add_field("Місце", "entry")
+            
+            # Додаємо обробку апострофа при отриманні даних в GUI теж (у методі generate_document)
 
     def add_field(self, label, field_type, values=None, state="normal"):
         frame = ttk.Frame(self.fields_container)
@@ -281,6 +283,13 @@ class ProtectionApp:
         
         # Remove empty fields from dictionary (though none should be empty now)
         personal_data = {k: v for k, v in personal_data.items() if v}
+
+        # Обробимо апостроф в імені
+        if "Ім'я" in personal_data:
+            personal_data["Ім'я"] = personal_data["Ім'я"].replace("’", "'")
+        elif "Ім’я" in personal_data:
+            val = personal_data.pop("Ім’я")
+            personal_data["Ім'я"] = val.replace("’", "'")
 
         # Auto-generate Contract Number if applicable
         if self.template_var.get() == "Contract for Education":

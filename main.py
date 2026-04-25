@@ -94,8 +94,14 @@ class DocumentProtectionSystem:
         """
         Уніфікований процес підготовки фону: завантаження, зміна розміру та вбудовування даних.
         """
-        from reportlab.lib.pagesizes import letter
-        width_pt, height_pt = letter
+        from reportlab.lib.pagesizes import letter, landscape
+        if "Cyberverse" in template_type:
+            # User wants landscape (album) orientation for Cyberverse
+            pagesize = landscape(letter)
+        else:
+            pagesize = letter
+            
+        width_pt, height_pt = pagesize
         width_px, height_px = int(width_pt * 2), int(height_pt * 2) # Higher resolution for quality
 
         if os.path.exists(bg_path):
@@ -196,14 +202,20 @@ class DocumentProtectionSystem:
         
         bg_mapping = {
             "Certificate of Achievement": os.path.join("png", "background_certificate.png"),
+            "Cyberverse Certificate": os.path.join("png", "background_cyberverse.png"),
             "Application Form": os.path.join("png", "background_app.png"),
             "Contract for Education": os.path.join("png", "background_contract.png")
         }
         bg_path = bg_mapping.get(template_type, os.path.join("png", "background_template.png"))
         
         # Prepare a clean background (just resized)
-        from reportlab.lib.pagesizes import letter
-        width_pt, height_pt = letter
+        from reportlab.lib.pagesizes import letter, landscape
+        if "Cyberverse" in template_type:
+            pagesize = landscape(letter)
+        else:
+            pagesize = letter
+            
+        width_pt, height_pt = pagesize
         width_px, height_px = int(width_pt * 2), int(height_pt * 2)
         if os.path.exists(bg_path):
             clean_bg = Image.open(bg_path).resize((width_px, height_px), Image.Resampling.LANCZOS)

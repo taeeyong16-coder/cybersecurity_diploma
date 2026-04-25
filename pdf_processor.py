@@ -31,8 +31,15 @@ class PDFProcessor:
             if os.path.exists(path):
                 try:
                     pdfmetrics.registerFont(TTFont('UnicodeFont', path))
+                    # Also register bold version if available
+                    bold_path = path.replace(".ttf", "bd.ttf")
+                    if os.path.exists(bold_path):
+                        pdfmetrics.registerFont(TTFont('UnicodeFontBold', bold_path))
+                        self.font_bold = 'UnicodeFontBold'
+                    else:
+                        self.font_bold = 'UnicodeFont'
+                        
                     self.font_name = 'UnicodeFont'
-                    self.font_bold = 'UnicodeFont' # Using same for simplicity or find bold version
                     break
                 except:
                     continue
@@ -40,8 +47,16 @@ class PDFProcessor:
     def generate_pdf(self, output_path: str, template_type: str, data: dict, 
                      stego_bg: Image.Image, user_signature_path: str = None):
         """Generates a protected PDF using a unified drawing method."""
-        c = canvas.Canvas(output_path, pagesize=letter)
-        width, height = letter
+        from reportlab.lib.pagesizes import letter, landscape
+        
+        if "Cyberverse" in template_type:
+            # Reverting to landscape (album) as requested by user
+            pagesize = landscape(letter)
+        else:
+            pagesize = letter
+            
+        c = canvas.Canvas(output_path, pagesize=pagesize)
+        width, height = pagesize
 
         # 1. Insert Steganographic Background
         bg_buffer = io.BytesIO()
@@ -49,18 +64,30 @@ class PDFProcessor:
         bg_buffer.seek(0)
         c.drawImage(ImageReader(bg_buffer), 0, 0, width=width, height=height)
 
+        # Ensure Cyberverse is recognizable by text layer
+        # Draw this as VERY small/transparent text behind/on background
+        if "Cyberverse" in template_type:
+            c.saveState()
+            c.setFont(self.font_name, 1)
+            c.setFillColorRGB(0, 0, 0, 0.001)
+            c.drawString(width/2, 10, "CYBERVERSE CERTIFICATE")
+            c.restoreState()
+
         # 2. Render visible text using unified method
         self._draw_document(c, width, height, template_type, data)
 
+        if "Cyberverse" in template_type:
+            return c.save()
+
         # 3. Insert User Signature Image if provided
-        if user_signature_path and os.path.exists(user_signature_path):
+        if user_signature_path and os.path.exists(user_signature_path) and "Cyberverse" not in template_type:
             sig_pos = self._get_asset_position(template_type, "signature", width, height)
             c.drawImage(user_signature_path, sig_pos['x'], sig_pos['y'], 
                         width=sig_pos['w'], height=sig_pos['h'], mask='auto')
 
         # 4. Insert Official Stamp if applicable
         stamp_path = os.path.join("png", "stamp.png")
-        if os.path.exists(stamp_path):
+        if os.path.exists(stamp_path) and "Cyberverse" not in template_type:
             stamp_pos = self._get_asset_position(template_type, "stamp", width, height)
             if stamp_pos:
                 c.drawImage(stamp_path, stamp_pos['x'], stamp_pos['y'], 
@@ -102,6 +129,9 @@ class PDFProcessor:
         elif template_type == "Official Letter":
             self._draw_letter(c, width, height, data)
             self.last_y = 150 # Fixed for letter
+        elif "Cyberverse" in template_type:
+            # self.last_y = 100 # Resetting to default not needed if _draw_cyberverse handles it
+            self._draw_cyberverse(c, width, height, data)
         else: # Application Form
             self._draw_application(c, width, height, data)
             self.last_y = getattr(self, "last_app_y", 100)
@@ -186,6 +216,41 @@ class PDFProcessor:
 
         # Reset color for any potential later drawing (though this is the end of certificate)
         c.setFillColorRGB(0, 0, 0)
+
+    def _draw_cyberverse(self, c, width, height, data):
+        """Малювання сертифіката Cyberverse на спеціальному фоні."""
+        # Гнучкий пошук полів у словнику (ігноруючи регістр, пробіли та різні апострофи)
+        def get_field(aliases):
+            for k, v in data.items():
+                k_norm = str(k).lower().strip().replace("’", "'")
+                for a in aliases:
+                    if a.lower().strip().replace("’", "'") == k_norm:
+                        return str(v).strip()
+            return ""
+
+        last_name = get_field(["Прізвище", "Last Name", "Surname"])
+        first_name = get_field(["Ім'я", "Ім’я", "First Name", "Name"])
+        middle_name = get_field(["По батькові", "Middle Name", "Patronymic"])
+        
+        full_name = f"{last_name} {first_name} {middle_name}".strip()
+        
+        # Якщо окремі поля порожні, спробуємо взяти ПІБ цілком
+        if not full_name:
+            full_name = get_field(["ПІБ", "Full Name", "Participant", "Name"])
+
+        # 1. ПІБ: чорним кольором, центр сторінки по горизонталі
+        c.setFillColorRGB(0, 0, 0)
+        c.setFont(self.font_name, 24)
+        c.drawCentredString(width / 2, height * 0.32, full_name)
+        
+        # 2. МІСЦЕ: білим кольором, центр сторінки
+        place = get_field(["Місце", "Зайняте місце", "Rank", "Place"])
+        if place:
+            c.setFillColorRGB(1, 1, 1)
+            c.setFont(self.font_name, 32)
+            c.drawCentredString(width / 2.1, height * 0.23, str(place))
+            
+        self.last_cyber_y = 100
 
     def _draw_letter(self, c, width, height, data):
         # Header
@@ -313,12 +378,7 @@ class PDFProcessor:
         c.drawCentredString(width / 2, y_pos, "ДОГОВІР")
         y_pos -= 20
         c.drawCentredString(width / 2, y_pos, "про надання платних освітніх послуг")
-        
-        y_pos -= 35 # Відступ перед повторним заголовком (1 абзац)
-        c.drawCentredString(width / 2, y_pos, "ДОГОВІР")
-        y_pos -= 20
-        c.drawCentredString(width / 2, y_pos, "про надання платних освітніх послуг")
-        y_pos -= 40 # Відступ після повторного заголовку (2 абзаци)
+        y_pos -= 40 # Відступ після заголовку
         
         c.setFont(self.font_name, 11)
         c.drawString(margin, y_pos, f"№ {data.get('Номер договору', '_______')}")
@@ -449,7 +509,12 @@ class PDFProcessor:
                 "(підпис клієнта)",
                 "Директор: Прищепа О.О.",
                 "Підпис клієнта: Директор: Прищепа О.О.",
-                "(підпис клієнта) (підпис директора)"
+                "(підпис клієнта) (підпис директора)",
+                "Організатор/Платформа:",
+                "Обсяг:",
+                "год. | Рівень:",
+                "Студентський квиток №:",
+                "Дата завершення:"
             ]
         elif template_type == "Application Form":
             return [
@@ -467,7 +532,15 @@ class PDFProcessor:
                 "(прізвище, ім’я, по батькові повністю)",
                 "Підпис абітурієнта:",
                 "Печатка:",
-                "Директор: Прищепа О.О."
+                "Директор: Прищепа О.О.",
+                "ЗАЯВА",
+                "дата народження:",
+                "контактний телефон:",
+                "електронна пошта:",
+                "серія паспорту:",
+                "на освітній рівень:",
+                "за спеціальністю:",
+                "форма навчання:"
             ]
         elif template_type == "Official Letter":
             return [
@@ -476,6 +549,15 @@ class PDFProcessor:
                 "ОФІЦІЙНИЙ ЛИСТ",
                 "З повагою,",
                 "Прищепа О.О."
+            ]
+        elif "Cyberverse" in template_type:
+            return [
+                "CYBERVERSE CERTIFICATE",
+                "EVENT: CYBERVERSE_ THE COST OF SILENCE",
+                "ISSUER_1: Снитюк В.Є.",
+                "ISSUER_2: Пархоменко І.І.",
+                "ROLE_1: Декан факультету інформаційних технологій",
+                "ROLE_2: Завідувач кафедри кібербезпеки та захисту інформації"
             ]
         elif template_type == "Contract for Education":
             return [
@@ -562,29 +644,60 @@ class PDFProcessor:
                 val = m.group(1).split("З повагою")[0].strip()
                 data_fields["Date"] = val
             
+        elif "Cyberverse" in text_blob.upper() or "THE COST OF SILENCE" in text_blob.upper() or "CYBERVERSE" in text_blob.upper():
+             template_type = "Cyberverse Certificate"
+             import re
+             lines = text_blob.split('\n')
+             
+             non_empty_lines = [l.strip() for l in lines if l.strip()]
+             
+             # ПІБ
+             if non_empty_lines:
+                 # ПІБ зазвичай в центрі, може бути першим або другим значущим рядком
+                 name_candidate = non_empty_lines[0]
+                 if "CYBERVERSE" in name_candidate.upper():
+                     name_candidate = non_empty_lines[1] if len(non_empty_lines) > 1 else ""
+                 
+                 name = name_candidate.replace("ЗА", "").replace("МІСЦЕ", "").strip()
+                 parts = name.split()
+                 if len(parts) >= 2:
+                     data_fields["Прізвище"] = parts[0]
+                     data_fields["Ім'я"] = parts[1]
+                     if len(parts) >= 3:
+                         data_fields["По батькові"] = " ".join(parts[2:])
+                 
+                 # Шукаємо Місце (цифри або римські)
+                 for line in non_empty_lines:
+                     # Шукаємо римські I-V або арабські цифри
+                     m_place = re.search(r'\b(I|II|III|IV|V|\d+)\b', line)
+                     if m_place and "CYBERVERSE" not in line.upper():
+                         val = m_place.group(1)
+                         data_fields["Зайняте місце"] = val
+                         data_fields["Місце"] = val # Для сумісності
+                         break
         elif "СЕРТИФІКАТ" in text_blob.upper():
-            template_type = "Certificate of Achievement"
-            import re
-            m = re.search(r'\"([^\"]+)\"', text_blob)
-            if m: data_fields["Назва курсу"] = m.group(1)
-            m = re.search(r'Платформа:?\s*(.*)', text_blob)
-            if m: data_fields["Платформа"] = m.group(1).split('\n')[0].strip()
-            m = re.search(r'Обсяг:?\s*(\d+)', text_blob)
-            if m: data_fields["Кількість годин"] = m.group(1)
-            m = re.search(r'Рівень:?\s*([^|\n]+)', text_blob)
-            if m: data_fields["Рівень курсу"] = m.group(1).strip()
-            m = re.search(r'Студентський квиток №:?\s*(.*)', text_blob)
-            if m: data_fields["Номер студентського"] = m.group(1).split('\n')[0].strip()
-            m = re.search(r'Дата завершення:?\s*(.*)', text_blob)
-            if m: data_fields["Дата завершення"] = m.group(1).split('\n')[0].strip()
-            m = re.search(r'(?:свідчить про те, що|засвідчує, що)\n?([^\n]+)', text_blob, re.IGNORECASE)
-            if m:
-                name = m.group(1).strip()
-                parts = name.split()
-                if len(parts) >= 3:
-                    data_fields["Прізвище"] = parts[0]
-                    data_fields["Ім'я"] = parts[1]
-                    data_fields["По батькові"] = " ".join(parts[2:])
+                template_type = "Certificate of Achievement"
+                import re
+                m = re.search(r'\"([^\"]+)\"', text_blob)
+                if m: data_fields["Назва курсу"] = m.group(1)
+                m = re.search(r'Платформа:?\s*(.*)', text_blob)
+                if m: data_fields["Платформа"] = m.group(1).split('\n')[0].strip()
+                m = re.search(r'Обсяг:?\s*(\d+)', text_blob)
+                if m: data_fields["Кількість годин"] = m.group(1)
+                m = re.search(r'Рівень:?\s*([^|\n]+)', text_blob)
+                if m: data_fields["Рівень курсу"] = m.group(1).strip()
+                m = re.search(r'Студентський квиток №:?\s*(.*)', text_blob)
+                if m: data_fields["Номер студентського"] = m.group(1).split('\n')[0].strip()
+                m = re.search(r'Дата завершення:?\s*(.*)', text_blob)
+                if m: data_fields["Дата завершення"] = m.group(1).split('\n')[0].strip()
+                m = re.search(r'(?:свідчить про те, що|засвідчує, що)\n?([^\n]+)', text_blob, re.IGNORECASE)
+                if m:
+                    name = m.group(1).strip()
+                    parts = name.split()
+                    if len(parts) >= 3:
+                        data_fields["Прізвище"] = parts[0]
+                        data_fields["Ім'я"] = parts[1]
+                        data_fields["По батькові"] = " ".join(parts[2:])
 
         elif "ЗАЯВА" in text_blob.upper():
             template_type = "Application Form"
@@ -656,7 +769,7 @@ class PDFProcessor:
                 "Спеціальність": r"Спеціальність:?\s*([^\n]+)",
                 "Освітній рівень": r"Освітній рівень:?\s*([^\n]+)",
                 "Форма навчання": r"Форма навчання:?\s*([^\n]+)",
-                "Загальна вартість (грн)": r"Загальна вартість послуг становить:?\s*([\d\s,]+)",
+                "Загальна вартість (грн)": r"становить:?\s*([\d\s,]+)",
                 "Варіанти оплати": r"Оплата здійснюється:?\s*([^\.]+)",
             }
             
@@ -668,7 +781,7 @@ class PDFProcessor:
 
             # Check if there are multiple matches for crucial fields and ensure we don't pick the wrong one.
             # For Price, we should check if multiple distinct prices are present.
-            price_matches = list(re.finditer(r"Загальна вартість послуг становить:?\s*([\d\s,]+)", text_blob, re.IGNORECASE))
+            price_matches = list(re.finditer(r"становить:?\s*([\d\s,]+)", text_blob, re.IGNORECASE))
             if len(price_matches) > 1:
                 # If we have multiple prices, and they are DIFFERENT, this is a clear sign of tampering.
                 # The first one might be the original (e.g. if it was hidden by white box but text is still there),

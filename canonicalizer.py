@@ -74,6 +74,9 @@ class Canonicalizer:
 
             # Фіксований порядок (алфавітний за ключами)
             for k in sorted(normalized_data.keys()):
+                # Виключаємо дублюючі поля для верифікації
+                if k == "Зайняте місце" and "Місце" in normalized_data:
+                    continue
                 lines.append(f"{k}: {normalized_data[k]}")
                 
             # Додавання статичних відповідальних осіб
@@ -86,6 +89,12 @@ class Canonicalizer:
             elif "Official Letter" in template_type:
                 lines.append("INSTITUTION: Київський національний університет імені Тараса Шевченка")
                 lines.append("DIRECTOR: Прищепа О.О.")
+            elif "Cyberverse" in template_type:
+                lines.append("EVENT: CYBERVERSE_ THE COST OF SILENCE")
+                lines.append("ISSUER_1: Снитюк В.Є.")
+                lines.append("ISSUER_2: Пархоменко І.І.")
+                lines.append("ROLE_1: Декан факультету інформаційних технологій")
+                lines.append("ROLE_2: Завідувач кафедри кібербезпеки та захисту інформації")
             elif "Contract for Education" in template_type:
                 lines.append("REPRESENTATIVE: Прищепа Олександра Олександрівна")
 
