@@ -77,6 +77,11 @@ class Canonicalizer:
                 # Виключаємо дублюючі поля для верифікації
                 if k == "Зайняте місце" and "Місце" in normalized_data:
                     continue
+                
+                # Спеціальна умова для Cyberverse Participation: ігноруємо поле місця
+                if template_type == "Cyberverse Participation Certificate" and k in ["Місце", "Зайняте місце"]:
+                    continue
+                    
                 lines.append(f"{k}: {normalized_data[k]}")
                 
             # Додавання статичних відповідальних осіб

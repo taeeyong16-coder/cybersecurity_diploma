@@ -67,7 +67,7 @@ class ProtectionApp:
         # Template selection
         ttk.Label(main_container, text="Виберіть шаблон документа:", style="Subheader.TLabel").pack(pady=(10, 5), anchor="w")
         self.template_var = tk.StringVar(value="Cyberverse Certificate")
-        templates = ["Cyberverse Certificate", "Certificate of Achievement", "Application Form", "Contract for Education"]
+        templates = ["Cyberverse Certificate", "Cyberverse Participation Certificate", "Certificate of Achievement", "Application Form", "Contract for Education"]
         self.template_menu = ttk.Combobox(main_container, textvariable=self.template_var, values=templates, state="readonly", font=("Segoe UI", 10))
         self.template_menu.pack(pady=5, fill="x")
         self.template_menu.bind("<<ComboboxSelected>>", self.on_template_change)
@@ -206,6 +206,11 @@ class ProtectionApp:
             self.add_field("Ім'я", "entry")
             self.add_field("По батькові", "entry")
             self.add_field("Місце", "entry")
+
+        elif template == "Cyberverse Participation Certificate":
+            self.add_field("Прізвище", "entry")
+            self.add_field("Ім'я", "entry")
+            self.add_field("По батькові", "entry")
             
             # Додаємо обробку апострофа при отриманні даних в GUI теж (у методі generate_document)
 

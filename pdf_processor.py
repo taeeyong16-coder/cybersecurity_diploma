@@ -44,6 +44,22 @@ class PDFProcessor:
                 except:
                     continue
 
+        # Register monospaced font for Cyrillic support
+        self.font_mono = "Courier" # Fallback
+        mono_paths = [
+            r"C:\Windows\Fonts\cour.ttf", # Courier New
+            r"C:\Windows\Fonts\consola.ttf", # Consolas
+            r"C:\Windows\Fonts\lucon.ttf" # Lucida Console
+        ]
+        for path in mono_paths:
+            if os.path.exists(path):
+                try:
+                    pdfmetrics.registerFont(TTFont('UnicodeMono', path))
+                    self.font_mono = 'UnicodeMono'
+                    break
+                except:
+                    continue
+
     def generate_pdf(self, output_path: str, template_type: str, data: dict, 
                      stego_bg: Image.Image, user_signature_path: str = None):
         """Generates a protected PDF using a unified drawing method."""
@@ -70,7 +86,8 @@ class PDFProcessor:
             c.saveState()
             c.setFont(self.font_name, 1)
             c.setFillColorRGB(0, 0, 0, 0.001)
-            c.drawString(width/2, 10, "CYBERVERSE CERTIFICATE")
+            # Use specific name for identification during extraction
+            c.drawString(width/2, 10, template_type.upper())
             c.restoreState()
 
         # 2. Render visible text using unified method
@@ -131,7 +148,7 @@ class PDFProcessor:
             self.last_y = 150 # Fixed for letter
         elif "Cyberverse" in template_type:
             # self.last_y = 100 # Resetting to default not needed if _draw_cyberverse handles it
-            self._draw_cyberverse(c, width, height, data)
+            self._draw_cyberverse(c, width, height, data, template_type)
         else: # Application Form
             self._draw_application(c, width, height, data)
             self.last_y = getattr(self, "last_app_y", 100)
@@ -217,7 +234,7 @@ class PDFProcessor:
         # Reset color for any potential later drawing (though this is the end of certificate)
         c.setFillColorRGB(0, 0, 0)
 
-    def _draw_cyberverse(self, c, width, height, data):
+    def _draw_cyberverse(self, c, width, height, data, template_type="Cyberverse Certificate"):
         """Малювання сертифіката Cyberverse на спеціальному фоні."""
         # Гнучкий пошук полів у словнику (ігноруючи регістр, пробіли та різні апострофи)
         def get_field(aliases):
@@ -240,15 +257,25 @@ class PDFProcessor:
 
         # 1. ПІБ: чорним кольором, центр сторінки по горизонталі
         c.setFillColorRGB(0, 0, 0)
-        c.setFont(self.font_name, 24)
+        
+        # Використовуємо моноширинний шрифт для шаблону участі
+        if template_type == "Cyberverse Participation Certificate":
+            c.setFont(self.font_mono, 24)
+        elif template_type == "Cyberverse Certificate":
+            c.setFont(self.font_mono, 24)
+        else:
+            c.setFont(self.font_name, 24)
+            
         c.drawCentredString(width / 2, height * 0.32, full_name)
         
         # 2. МІСЦЕ: білим кольором, центр сторінки
-        place = get_field(["Місце", "Зайняте місце", "Rank", "Place"])
-        if place:
-            c.setFillColorRGB(1, 1, 1)
-            c.setFont(self.font_name, 32)
-            c.drawCentredString(width / 2.1, height * 0.23, str(place))
+        # Для шаблону участі ця секція не виводиться
+        if template_type != "Cyberverse Participation Certificate":
+            place = get_field(["Місце", "Зайняте місце", "Rank", "Place"])
+            if place:
+                c.setFillColorRGB(1, 1, 1)
+                c.setFont(self.font_name, 32)
+                c.drawCentredString(width / 2.1, height * 0.23, str(place))
             
         self.last_cyber_y = 100
 
@@ -553,6 +580,7 @@ class PDFProcessor:
         elif "Cyberverse" in template_type:
             return [
                 "CYBERVERSE CERTIFICATE",
+                "CYBERVERSE PARTICIPATION CERTIFICATE",
                 "EVENT: CYBERVERSE_ THE COST OF SILENCE",
                 "ISSUER_1: Снитюк В.Є.",
                 "ISSUER_2: Пархоменко І.І.",
@@ -645,7 +673,11 @@ class PDFProcessor:
                 data_fields["Date"] = val
             
         elif "Cyberverse" in text_blob.upper() or "THE COST OF SILENCE" in text_blob.upper() or "CYBERVERSE" in text_blob.upper():
-             template_type = "Cyberverse Certificate"
+             if "PARTICIPATION" in text_blob.upper():
+                 template_type = "Cyberverse Participation Certificate"
+             else:
+                 template_type = "Cyberverse Certificate"
+                 
              import re
              lines = text_blob.split('\n')
              
@@ -667,14 +699,15 @@ class PDFProcessor:
                          data_fields["По батькові"] = " ".join(parts[2:])
                  
                  # Шукаємо Місце (цифри або римські)
-                 for line in non_empty_lines:
-                     # Шукаємо римські I-V або арабські цифри
-                     m_place = re.search(r'\b(I|II|III|IV|V|\d+)\b', line)
-                     if m_place and "CYBERVERSE" not in line.upper():
-                         val = m_place.group(1)
-                         data_fields["Зайняте місце"] = val
-                         data_fields["Місце"] = val # Для сумісності
-                         break
+                 if template_type != "Cyberverse Participation Certificate":
+                     for line in non_empty_lines:
+                         # Шукаємо римські I-V або арабські цифри
+                         m_place = re.search(r'\b(I|II|III|IV|V|\d+)\b', line)
+                         if m_place and "CYBERVERSE" not in line.upper():
+                             val = m_place.group(1)
+                             data_fields["Зайняте місце"] = val
+                             data_fields["Місце"] = val # Для сумісності
+                             break
         elif "СЕРТИФІКАТ" in text_blob.upper():
                 template_type = "Certificate of Achievement"
                 import re

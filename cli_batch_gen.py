@@ -36,13 +36,15 @@ def batch_generation(system):
     print("2. Certificate of Achievement")
     print("3. Application Form")
     print("4. Contract for Education")
+    print("5. Cyberverse Participation Certificate")
     
     template_choice = input("Виберіть номер шаблону [1]: ") or "1"
     template_map = {
         "1": "Cyberverse Certificate",
         "2": "Certificate of Achievement",
         "3": "Application Form",
-        "4": "Contract for Education"
+        "4": "Contract for Education",
+        "5": "Cyberverse Participation Certificate"
     }
     template_type = template_map.get(template_choice, "Cyberverse Certificate")
     
@@ -107,7 +109,11 @@ def batch_generation(system):
                     prizv = find_val(row, ['Прізвище', 'Surname', 'Last Name'])
                     imya = find_val(row, ['Ім’я', "Ім'я", 'Name', 'First Name'])
                     pobat = find_val(row, ['По батькові', 'Middle Name', 'Patronymic'])
-                    place = find_val(row, ['Місце', 'Зайняте місце', 'Place', 'Rank'])
+                    
+                    if template_type == "Cyberverse Participation Certificate":
+                        place = "" # Ignore place for participation template
+                    else:
+                        place = find_val(row, ['Місце', 'Зайняте місце', 'Place', 'Rank'])
 
                     name = f"{prizv} {imya} {pobat}".strip()
                     if not name:

@@ -203,6 +203,7 @@ class DocumentProtectionSystem:
         bg_mapping = {
             "Certificate of Achievement": os.path.join("png", "background_certificate.png"),
             "Cyberverse Certificate": os.path.join("png", "background_cyberverse.png"),
+            "Cyberverse Participation Certificate": os.path.join("png", "background_participation.png"),
             "Application Form": os.path.join("png", "background_app.png"),
             "Contract for Education": os.path.join("png", "background_contract.png")
         }
