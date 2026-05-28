@@ -118,7 +118,7 @@ class PDFProcessor:
             if template_type == "Certificate of Achievement":
                 return {'x': 150, 'y': getattr(self, "last_y", 195), 'w': 120, 'h': 40}
             elif template_type == "Application Form":
-                return {'x': 150, 'y': getattr(self, "last_y", 170), 'w': 120, 'h': 40}
+                return {'x': 150, 'y': 130, 'w': 120, 'h': 40}
             elif template_type == "Contract for Education":
                 return {'x': 70, 'y': getattr(self, "last_y", 70), 'w': 120, 'h': 40}
             else: # Official Letter or others
