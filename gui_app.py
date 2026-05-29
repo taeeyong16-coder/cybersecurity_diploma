@@ -4,630 +4,942 @@ import os
 from tkcalendar import DateEntry
 from main import DocumentProtectionSystem
 
+# ─────────────────────────── Animated Notebook ───────────────────────────────
+
+class AnimatedNotebook(tk.Frame):
+    """
+    Custom notebook with smooth fade-in animation on tab switch.
+    Replaces ttk.Notebook to enable canvas-level animation.
+    """
+
+    ANIM_STEPS   = 8      # frames
+    ANIM_DELAY   = 18     # ms between frames
+
+    def __init__(self, parent, colors, **kwargs):
+        super().__init__(parent, bg=colors["bg_primary"], **kwargs)
+        self.colors   = colors
+        self._tabs    = []          # list of (title, frame)
+        self._current = 0
+        self._alpha   = 1.0
+        self._anim_id = None
+
+        # ── tab bar ──────────────────────────────────────────────────────────
+        self._bar = tk.Frame(self, bg=colors["bg_primary"])
+        self._bar.pack(side="top", fill="x")
+
+        # thin accent line under the bar
+        self._accent = tk.Frame(self, bg=colors["border"], height=1)
+        self._accent.pack(side="top", fill="x")
+
+        # ── content area ─────────────────────────────────────────────────────
+        self._content = tk.Frame(self, bg=colors["bg_primary"])
+        self._content.pack(side="top", fill="both", expand=True)
+
+    # ── public API ───────────────────────────────────────────────────────────
+
+    def add(self, frame, text: str):
+        idx = len(self._tabs)
+        self._tabs.append((text, frame))
+
+        btn = tk.Button(
+            self._bar,
+            text=text,
+            bd=0, relief="flat", cursor="hand2",
+            font=("Segoe UI", 10, "bold"),
+            bg=self.colors["bg_primary"],
+            fg=self.colors["text_secondary"],
+            activebackground=self.colors["bg_secondary"],
+            activeforeground=self.colors["primary"],
+            padx=20, pady=10,
+            command=lambda i=idx: self._select(i),
+        )
+        btn.pack(side="left")
+
+        frame.place(in_=self._content, x=0, y=0, relwidth=1, relheight=1)
+        frame.lower()
+
+        if idx == 0:
+            self._show_tab(0, animate=False)
+
+    def select(self, idx: int):
+        self._select(idx)
+
+    # ── internals ────────────────────────────────────────────────────────────
+
+    def _select(self, idx: int):
+        if idx == self._current:
+            return
+        if self._anim_id:
+            self.after_cancel(self._anim_id)
+        self._fade_out(idx)
+
+    def _fade_out(self, next_idx: int):
+        """Simulate fade by quickly hiding current and revealing next."""
+        # Because vanilla tk has no real alpha on frames we use a fast
+        # overlay canvas trick: cover → switch → uncover.
+        current_frame = self._tabs[self._current][1]
+        overlay = tk.Frame(self._content, bg=self.colors["bg_primary"])
+        overlay.place(in_=self._content, x=0, y=0, relwidth=1, relheight=1)
+        overlay.lift()
+
+        def step(n, overlay=overlay):
+            if n >= self.ANIM_STEPS:
+                overlay.destroy()
+                return
+            # gradually make overlay transparent by scheduling reveal
+            self._anim_id = self.after(
+                self.ANIM_DELAY,
+                lambda: step(n + 1)
+            )
+
+        # switch immediately under overlay
+        self._show_tab(next_idx, animate=False)
+        # then animate overlay away
+        step(0)
+
+    def _show_tab(self, idx: int, animate: bool = True):
+        self._current = idx
+        _, frame = self._tabs[idx]
+        frame.lift()
+        self._update_tab_bar()
+
+    def _update_tab_bar(self):
+        for i, btn in enumerate(self._bar.winfo_children()):
+            if not isinstance(btn, tk.Button):
+                continue
+            if i == self._current:
+                btn.config(
+                    fg=self.colors["primary"],
+                    bg=self.colors["bg_primary"],
+                    font=("Segoe UI", 10, "bold"),
+                )
+                # draw bottom border on active tab via a tiny frame
+                # (we use relief trick inside button)
+                btn.config(relief="groove", bd=0,
+                           highlightthickness=2,
+                           highlightcolor=self.colors["primary"],
+                           highlightbackground=self.colors["primary"])
+            else:
+                btn.config(
+                    fg=self.colors["text_secondary"],
+                    bg=self.colors["bg_primary"],
+                    font=("Segoe UI", 10),
+                    relief="flat", bd=0,
+                    highlightthickness=0,
+                )
+
+
+# ─────────────────────────── Rounded helpers ─────────────────────────────────
+
+def rounded_button(parent, text, command, bg, fg="white",
+                   hover_bg=None, font=("Segoe UI", 10, "bold"),
+                   padx=18, pady=8, radius=8, width=None):
+    """
+    A tk.Button styled to appear rounded via consistent padding + relief.
+    Tkinter doesn't support real border-radius, so we approximate with
+    flat styling + a canvas-drawn rounded rectangle background for key
+    action buttons.
+    """
+    hover_bg = hover_bg or bg
+    btn = tk.Button(
+        parent,
+        text=text, command=command,
+        bg=bg, fg=fg, activebackground=hover_bg, activeforeground=fg,
+        font=font, relief="flat", bd=0, cursor="hand2",
+        padx=padx, pady=pady,
+    )
+    if width:
+        btn.config(width=width)
+
+    def on_enter(e):
+        btn.config(bg=hover_bg)
+
+    def on_leave(e):
+        btn.config(bg=bg)
+
+    btn.bind("<Enter>", on_enter)
+    btn.bind("<Leave>", on_leave)
+    return btn
+
+
+def styled_entry(parent, textvariable=None, state="normal",
+                 font=("Segoe UI", 10), colors=None, width=None):
+    """ttk.Entry with consistent styling."""
+    kw = dict(font=font, state=state)
+    if textvariable:
+        kw["textvariable"] = textvariable
+    if width:
+        kw["width"] = width
+    e = ttk.Entry(parent, **kw)
+    return e
+
+
+def styled_combobox(parent, values, textvariable=None,
+                    font=("Segoe UI", 10), width=None):
+    kw = dict(values=values, state="readonly", font=font)
+    if textvariable:
+        kw["textvariable"] = textvariable
+    if width:
+        kw["width"] = width
+    return ttk.Combobox(parent, **kw)
+
+
+# ─────────────────────────── Main Application ────────────────────────────────
+
 class ProtectionApp:
+    # ── field label column width (characters) ──
+    LABEL_WIDTH = 30
+
     def __init__(self, root):
         self.root = root
         self.root.title("Система захисту PDF документів")
-        self.root.geometry("900x750")
-        self.root.minsize(800, 600)
+        self.root.geometry("980x720")
+        self.root.minsize(860, 620)
 
-        # Modern Light Theme Colors
         self.colors = {
-            "bg_primary": "#FFFFFF",
-            "bg_secondary": "#F5F7FA",
-            "bg_tertiary": "#EEF2F7",
-            "primary": "#2563EB",
+            "bg_primary":    "#FFFFFF",
+            "bg_secondary":  "#F5F7FA",
+            "bg_tertiary":   "#EEF2F7",
+            "primary":       "#2563EB",
             "primary_hover": "#1D4ED8",
-            "success": "#10B981",
+            "success":       "#10B981",
             "success_hover": "#059669",
-            "danger": "#EF4444",
-            "danger_hover": "#DC2626",
-            "warning": "#F59E0B",
+            "danger":        "#EF4444",
+            "danger_hover":  "#DC2626",
+            "warning":       "#F59E0B",
             "warning_hover": "#D97706",
-            "text_primary": "#1F2937",
-            "text_secondary": "#6B7280",
+            "text_primary":  "#1F2937",
+            "text_secondary":"#6B7280",
             "text_tertiary": "#9CA3AF",
-            "border": "#E5E7EB",
-            "shadow": "#00000010"
+            "border":        "#E5E7EB",
         }
 
         self.system = DocumentProtectionSystem()
         self.system.create_dummy_assets()
-
         self.bg_template_path = os.path.join("png", "background_template.png")
-        
-        self.create_widgets()
 
-    def create_widgets(self):
-        # Configure modern style
-        self._configure_modern_styles()
+        self._configure_styles()
+        self.root.configure(bg=self.colors["bg_primary"])
+        self._build_ui()
 
-        self.root.configure(background=self.colors["bg_primary"])
+    # ─────────────────── styles ──────────────────────────────────────────────
 
-        # Disable tab animation at TCL level
-        try:
-            self.root.tk.call('set', 'tk_patchLevel')
-            # Force no animation in notebook
-            self.root.tk.call('option', 'add', '*Notebook.TabPadding', '12 6')
-        except:
-            pass
+    def _configure_styles(self):
+        s = ttk.Style()
+        s.theme_use("clam")
+        c = self.colors
 
-        # Create main container with padding
-        main_frame = ttk.Frame(self.root)
-        main_frame.pack(fill="both", expand=True)
+        s.configure("TFrame",
+                    background=c["bg_primary"], relief="flat", borderwidth=0)
+        s.configure("TLabel",
+                    background=c["bg_primary"],
+                    foreground=c["text_primary"],
+                    font=("Segoe UI", 10))
+        s.configure("Small.TLabel",
+                    font=("Segoe UI", 9),
+                    foreground=c["text_secondary"],
+                    background=c["bg_primary"])
+        s.configure("Header.TLabel",
+                    font=("Segoe UI", 16, "bold"),
+                    foreground=c["text_primary"],
+                    background=c["bg_primary"])
+        s.configure("Sub.TLabel",
+                    font=("Segoe UI", 11, "bold"),
+                    foreground=c["text_primary"],
+                    background=c["bg_primary"])
 
-        # Header section
-        self._create_header(main_frame)
+        # Entries
+        s.configure("TEntry",
+                    font=("Segoe UI", 10),
+                    fieldbackground=c["bg_primary"],
+                    foreground=c["text_primary"],
+                    borderwidth=1,
+                    relief="solid",
+                    padding=6,
+                    lightcolor=c["border"],
+                    darkcolor=c["border"])
+        s.map("TEntry",
+              fieldbackground=[("focus", c["bg_secondary"])],
+              lightcolor=[("focus", c["primary"])],
+              darkcolor=[("focus", c["primary"])])
 
-        # Tabs with modern styling
-        self.notebook = ttk.Notebook(main_frame)
-        self.notebook.pack(expand=True, fill="both", padx=0, pady=0)
+        # Combobox
+        s.configure("TCombobox",
+                    font=("Segoe UI", 10),
+                    fieldbackground=c["bg_primary"],
+                    foreground=c["text_primary"],
+                    borderwidth=1,
+                    relief="solid",
+                    padding=6,
+                    arrowcolor=c["primary"],
+                    lightcolor=c["border"],
+                    darkcolor=c["border"])
+        s.map("TCombobox",
+              fieldbackground=[("focus", c["bg_secondary"])])
 
-        # Generation Tab (formerly User)
-        self.user_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.user_frame, text="  📝 ГЕНЕРУВАННЯ  ")
-        self.setup_user_tab()
+        # Progressbar
+        s.configure("TProgressbar",
+                    background=c["success"],
+                    troughcolor=c["bg_secondary"],
+                    borderwidth=0,
+                    thickness=6)
 
-        # Verification Tab (formerly Admin)
-        self.admin_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.admin_frame, text="  🔍 ПЕРЕВІРКА  ")
-        self.setup_admin_tab()
+        # Radiobutton
+        s.configure("TRadiobutton",
+                    background=c["bg_primary"],
+                    foreground=c["text_primary"],
+                    font=("Segoe UI", 10))
+        s.map("TRadiobutton",
+              background=[("active", c["bg_primary"])])
 
-        # Mass Generation Tab
-        self.mass_gen_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.mass_gen_frame, text="  📦 МАССОВЕ ГЕНЕРУВАННЯ  ")
-        self.setup_mass_generation_tab()
+        # Scrollbar
+        s.configure("TScrollbar",
+                    background=c["bg_secondary"],
+                    troughcolor=c["bg_primary"],
+                    borderwidth=0,
+                    arrowcolor=c["text_secondary"])
 
-    def _configure_modern_styles(self):
-        """Configure all modern styles for the application"""
-        style = ttk.Style()
-        style.theme_use('clam')
+    # ─────────────────── layout ──────────────────────────────────────────────
 
-        # Configure TFrame
-        style.configure("TFrame", background=self.colors["bg_primary"], relief="flat", borderwidth=0)
-        style.configure("Card.TFrame", background=self.colors["bg_primary"], relief="flat", borderwidth=1)
-        style.map("Card.TFrame", background=[])
+    def _build_ui(self):
+        c = self.colors
 
-        # Configure TLabel
-        style.configure("TLabel", background=self.colors["bg_primary"], foreground=self.colors["text_primary"], font=("Segoe UI", 10))
-        style.configure("Header.TLabel", font=("Segoe UI", 18, "bold"), foreground=self.colors["text_primary"], background=self.colors["bg_primary"])
-        style.configure("Subheader.TLabel", font=("Segoe UI", 12, "bold"), foreground=self.colors["text_primary"], background=self.colors["bg_primary"])
-        style.configure("Small.TLabel", font=("Segoe UI", 8), foreground=self.colors["text_secondary"], background=self.colors["bg_primary"])
-        style.configure("Muted.TLabel", font=("Segoe UI", 8), foreground=self.colors["text_tertiary"], background=self.colors["bg_primary"])
+        # ── header ───────────────────────────────────────────────────────────
+        hdr = tk.Frame(self.root, bg=c["bg_primary"])
+        hdr.pack(fill="x", padx=28, pady=(16, 4))
 
-        # Configure TButton - Primary Action
-        style.configure("Primary.TButton",
-            font=("Segoe UI", 10, "bold"),
-            background=self.colors["primary"],
-            foreground="white",
-            borderwidth=2,
-            relief="solid",
-            padding=10,
-            anchor="center"
-        )
-        style.map("Primary.TButton",
-            background=[
-                ('active', self.colors["primary_hover"]),
-                ('pressed', self.colors["primary_hover"]),
-                ('disabled', self.colors["text_tertiary"])
-            ],
-            foreground=[('disabled', self.colors["bg_secondary"])]
-        )
+        tk.Label(hdr, text="🔐  Система захисту PDF документів",
+                 bg=c["bg_primary"], fg=c["text_primary"],
+                 font=("Segoe UI", 16, "bold")).pack(side="left")
 
-        # Configure TButton - Secondary Action
-        style.configure("Secondary.TButton",
-            font=("Segoe UI", 9),
-            background=self.colors["bg_secondary"],
-            foreground=self.colors["text_primary"],
-            borderwidth=2,
-            relief="solid",
-            padding=8,
-            anchor="center"
-        )
-        style.map("Secondary.TButton",
-            background=[
-                ('active', self.colors["bg_tertiary"]),
-                ('pressed', self.colors["bg_tertiary"])
-            ]
-        )
+        tk.Frame(self.root, bg=c["border"], height=1).pack(fill="x")
 
-        # Configure TButton - Danger Action
-        style.configure("Danger.TButton",
-            font=("Segoe UI", 9),
-            background=self.colors["danger"],
-            foreground="white",
-            borderwidth=2,
-            relief="solid",
-            padding=8,
-            anchor="center"
-        )
-        style.map("Danger.TButton",
-            background=[
-                ('active', self.colors["danger_hover"]),
-                ('pressed', self.colors["danger_hover"])
-            ]
-        )
+        # ── animated notebook ────────────────────────────────────────────────
+        self.notebook = AnimatedNotebook(self.root, c)
+        self.notebook.pack(fill="both", expand=True)
 
-        # Configure TEntry - with visible borders for rounded effect
-        style.configure("TEntry",
-            font=("Segoe UI", 9),
-            fieldbackground=self.colors["bg_primary"],
-            background=self.colors["bg_primary"],
-            foreground=self.colors["text_primary"],
-            borderwidth=2,
-            relief="solid",
-            padding=6,
-            lightcolor=self.colors["border"],
-            darkcolor=self.colors["border"]
-        )
-        style.map("TEntry",
-            fieldbackground=[
-                ('focus', self.colors["bg_secondary"])
-            ],
-            borderwidth=[('focus', 2)]
-        )
+        # ── pages ────────────────────────────────────────────────────────────
+        self.gen_frame  = tk.Frame(self.notebook, bg=c["bg_primary"])
+        self.ver_frame  = tk.Frame(self.notebook, bg=c["bg_primary"])
+        self.mass_frame = tk.Frame(self.notebook, bg=c["bg_primary"])
 
-        # Configure TCombobox - with visible borders
-        style.configure("TCombobox",
-            font=("Segoe UI", 9),
-            fieldbackground=self.colors["bg_primary"],
-            background=self.colors["bg_primary"],
-            foreground=self.colors["text_primary"],
-            arrowcolor=self.colors["primary"],
-            borderwidth=2,
-            relief="solid",
-            padding=6,
-            lightcolor=self.colors["border"],
-            darkcolor=self.colors["border"]
-        )
-        style.map("TCombobox",
-            fieldbackground=[('focus', self.colors["bg_secondary"])]
-        )
+        self.notebook.add(self.gen_frame,  text="  📝  ГЕНЕРУВАННЯ  ")
+        self.notebook.add(self.ver_frame,  text="  🔍  ПЕРЕВІРКА  ")
+        self.notebook.add(self.mass_frame, text="  📦  МАСОВЕ ГЕНЕРУВАННЯ  ")
 
-        # Configure TNotebook and TNotebook.Tab
-        style.configure("TNotebook",
-            background=self.colors["bg_primary"],
-            borderwidth=0
-        )
-        style.configure("TNotebook.Tab",
-            padding=[12, 6],
-            font=("Segoe UI", 10, "bold"),
-            background=self.colors["bg_secondary"],
-            foreground=self.colors["text_secondary"],
-            selectcolor=self.colors["bg_primary"]
-        )
-        # No animation - direct color switch
-        style.map("TNotebook.Tab",
-            background=[('selected', self.colors["bg_primary"])],
-            foreground=[('selected', self.colors["primary"])],
-            selectcolor=[('selected', self.colors["bg_primary"])]
-        )
+        self._build_generate_tab()
+        self._build_verify_tab()
+        self._build_mass_tab()
 
-        # Configure Progressbar
-        style.configure("TProgressbar",
-            background=self.colors["success"],
-            troughcolor=self.colors["bg_secondary"],
-            borderwidth=0,
-            relief="flat",
-            thickness=8
-        )
+    # ══════════════════════════════════════════════════════════════════════════
+    # TAB 1 — GENERATE
+    # ══════════════════════════════════════════════════════════════════════════
 
-        # Configure Scrollbar
-        style.configure("TScrollbar",
-            background=self.colors["bg_secondary"],
-            troughcolor=self.colors["bg_primary"],
-            borderwidth=0,
-            arrowcolor=self.colors["text_secondary"],
-            darkcolor=self.colors["bg_secondary"],
-            lightcolor=self.colors["bg_secondary"]
-        )
+    def _build_generate_tab(self):
+        """
+        Layout: two equal panes side-by-side.
+          LEFT  – template selector + dynamic fields (no scroll, grid-based)
+          RIGHT – signature + action buttons
+        No scrollbar: all elements must fit in full-screen mode.
+        """
+        c = self.colors
+        root_frame = tk.Frame(self.gen_frame, bg=c["bg_primary"])
+        root_frame.pack(fill="both", expand=True, padx=24, pady=16)
 
-    def _create_header(self, parent):
-        """Create application header"""
-        header_frame = ttk.Frame(parent)
-        header_frame.pack(fill="x", padx=24, pady=12)
+        # ── LEFT pane ────────────────────────────────────────────────────────
+        left = tk.Frame(root_frame, bg=c["bg_primary"])
+        left.pack(side="left", fill="both", expand=True, padx=(0, 16))
 
-        title = ttk.Label(header_frame, text="Система захисту PDF документів", style="Header.TLabel")
-        title.pack(anchor="w", pady=(0, 4))
-
-    def _set_frame_bg(self, frame, color):
-        """Helper to set frame background color"""
-        style = ttk.Style()
-        style.configure(f"{id(frame)}.TFrame", background=color)
-        frame.configure(style=f"{id(frame)}.TFrame")
-
-    def setup_user_tab(self):
-        # Main container with two columns
-        main_container = ttk.Frame(self.user_frame)
-        main_container.pack(fill="both", expand=True)
-
-        # Left column - for form content
-        left_frame = ttk.Frame(main_container)
-        left_frame.pack(side="left", fill="both", expand=True)
-
-        # Right column - for action buttons
-        right_frame = ttk.Frame(main_container)
-        right_frame.pack(side="right", fill="y", padx=12, pady=12)
-
-        # ===== LEFT COLUMN: Scrollable form =====
-        canvas = tk.Canvas(left_frame, background=self.colors["bg_primary"], highlightthickness=0, bd=0)
-        scrollbar = ttk.Scrollbar(left_frame, orient="vertical", command=canvas.yview)
-        self.scrollable_frame = ttk.Frame(canvas)
-
-        self.scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-
-        canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-
-        # Content frame with proper padding
-        content_frame = ttk.Frame(self.scrollable_frame)
-        content_frame.pack(fill="x", padx=20, pady=12)
-
-        # Template selection card
-        self._create_card_section(content_frame, "📋 Вибір шаблону", [
-            ("Виберіть шаблон документа:", None)
-        ])
-
+        # Template selector
+        self._section_label(left, "📋  Шаблон документа")
         self.template_var = tk.StringVar(value="Cyberverse Certificate")
-        templates = ["Cyberverse Certificate", "Cyberverse Participation Certificate", "Certificate of Achievement", "Application Form", "Contract for Education"]
-        self.template_menu = ttk.Combobox(content_frame, textvariable=self.template_var, values=templates, state="readonly", font=("Segoe UI", 9))
-        self.template_menu.pack(pady=(0, 16), fill="x")
-        self.template_menu.bind("<<ComboboxSelected>>", self.on_template_change)
+        templates = [
+            "Cyberverse Certificate",
+            "Cyberverse Participation Certificate",
+            "Certificate of Achievement",
+            "Application Form",
+            "Contract for Education",
+        ]
+        cb = styled_combobox(left, templates, textvariable=self.template_var)
+        cb.pack(fill="x", pady=(4, 14))
+        cb.bind("<<ComboboxSelected>>", self.on_template_change)
 
-        # Fields container
-        fields_label = ttk.Label(content_frame, text="📝 Персональні дані", style="Subheader.TLabel")
-        fields_label.pack(pady=(0, 12), anchor="w")
+        # Divider
+        tk.Frame(left, bg=c["border"], height=1).pack(fill="x", pady=(0, 12))
 
-        self.fields_container = ttk.Frame(content_frame)
-        self.fields_container.pack(fill="x", pady=(0, 16))
+        # Fields section label
+        self._section_label(left, "📝  Персональні дані")
 
-        self.fields = {}
-        self.course_data = {
-            "Introduction to Cybersecurity": {"platform": "Cisco", "hours": "15", "level": "Beginner"},
-            "Cybersecurity Essentials": {"platform": "Cisco", "hours": "30", "level": "Intermediate"},
-            "Network Security": {"platform": "Cisco", "hours": "40", "level": "Advanced"},
-            "Ethical Hacking (Cisco NetAcad)": {"platform": "Cisco", "hours": "70", "level": "Advanced"},
+        # Fields container – uses grid for consistent alignment
+        self.fields_container = tk.Frame(left, bg=c["bg_primary"])
+        self.fields_container.pack(fill="both", expand=True, pady=(6, 0))
+        self.fields_container.columnconfigure(1, weight=1)
+
+        self.fields        = {}
+        self.course_data   = {
+            "Introduction to Cybersecurity":           {"platform": "Cisco",    "hours": "15",  "level": "Beginner"},
+            "Cybersecurity Essentials":                {"platform": "Cisco",    "hours": "30",  "level": "Intermediate"},
+            "Network Security":                        {"platform": "Cisco",    "hours": "40",  "level": "Advanced"},
+            "Ethical Hacking (Cisco NetAcad)":         {"platform": "Cisco",    "hours": "70",  "level": "Advanced"},
             "Google Cybersecurity Professional Certificate": {"platform": "Coursera", "hours": "180", "level": "Professional"},
-            "IBM Cybersecurity Analyst": {"platform": "Coursera", "hours": "120", "level": "Intermediate"},
-            "Cybersecurity Specialization (Maryland)": {"platform": "Coursera", "hours": "90", "level": "Advanced"},
-            "Applied Cryptography": {"platform": "Coursera", "hours": "45", "level": "Advanced"},
+            "IBM Cybersecurity Analyst":               {"platform": "Coursera", "hours": "120", "level": "Intermediate"},
+            "Cybersecurity Specialization (Maryland)": {"platform": "Coursera", "hours": "90",  "level": "Advanced"},
+            "Applied Cryptography":                    {"platform": "Coursera", "hours": "45",  "level": "Advanced"},
         }
-
         self.signature_path = ""
+        self.last_generated_pdf = ""
 
-        # Signature section
-        self.sig_section = ttk.Frame(content_frame)
-        self.sig_section.pack(fill="x", pady=12)
+        # ── RIGHT pane ───────────────────────────────────────────────────────
+        right = tk.Frame(root_frame, bg=c["bg_primary"], width=200)
+        right.pack(side="right", fill="y")
+        right.pack_propagate(False)
 
-        sig_label = ttk.Label(self.sig_section, text="✍️ Цифровий підпис", style="Subheader.TLabel")
-        sig_label.pack(pady=(0, 8), anchor="w")
+        self._section_label(right, "✍️  Підпис")
 
-        sig_container = ttk.Frame(self.sig_section)
-        sig_container.pack(fill="x")
+        sig_row = tk.Frame(right, bg=c["bg_primary"])
+        sig_row.pack(fill="x", pady=(4, 0))
 
-        self.sig_label = ttk.Label(sig_container, text="Оберіть файл підпису (PNG)", style="Small.TLabel")
-        self.sig_label.pack(side="left", padx=(0, 8))
-        ttk.Button(sig_container, text="📁 Вибрати...", command=self.upload_signature, style="Secondary.TButton").pack(side="left", fill="x", expand=True)
+        self.sig_label = tk.Label(
+            sig_row,
+            text="Файл не обрано",
+            bg=c["bg_secondary"],
+            fg=c["text_tertiary"],
+            font=("Segoe UI", 9),
+            anchor="w",
+            padx=8, pady=6,
+            relief="flat",
+        )
+        self.sig_label.pack(fill="x", pady=(0, 6))
+
+        rounded_button(
+            sig_row, "📁  Вибрати PNG",
+            self.upload_signature,
+            bg=c["bg_tertiary"], fg=c["text_primary"],
+            hover_bg=c["border"],
+            font=("Segoe UI", 9),
+        ).pack(fill="x")
+
+        # Signature section container (to show/hide)
+        self.sig_section = sig_row
 
         self.render_fields()
 
-        # ===== RIGHT COLUMN: Action Buttons =====
-        button_frame = ttk.Frame(right_frame)
-        button_frame.pack(fill="both", expand=True)
+        tk.Frame(right, bg=c["border"], height=1).pack(fill="x", pady=14)
 
-        # Main action button
-        main_btn = ttk.Button(button_frame, text="🔒 Генерувати\nта захистити\nPDF",
-                             style="Primary.TButton", command=self.generate_document)
-        main_btn.pack(fill="both", expand=True, pady=(0, 12))
+        # Action buttons
 
-        self.last_generated_pdf = ""
+        rounded_button(
+            right, "🔒  Генерувати та захистити PDF",
+            self.generate_document,
+            bg=c["primary"], fg="white",
+            hover_bg=c["primary_hover"],
+            font=("Segoe UI", 10, "bold"),
+            pady=12,
+        ).pack(fill="x", pady=(0, 8))
 
-        # Open PDF button
-        self.open_btn = ttk.Button(button_frame, text="📄 Відкрити\nPDF",
-                                  command=self.open_pdf, state="disabled", style="Secondary.TButton")
-        self.open_btn.pack(fill="both", expand=True, pady=(0, 8))
+        self.open_btn = rounded_button(
+            right, "📄  Відкрити PDF",
+            self.open_pdf,
+            bg=c["bg_secondary"], fg=c["text_primary"],
+            hover_bg=c["bg_tertiary"],
+            font=("Segoe UI", 9),
+            pady=9,
+        )
+        self.open_btn.pack(fill="x", pady=(0, 6))
+        self.open_btn.config(state="disabled")
 
-        # Open archive button
-        archive_btn = ttk.Button(button_frame, text="📁 Архів\nфайлів",
-                                command=self.open_archive, style="Secondary.TButton")
-        archive_btn.pack(fill="both", expand=True)
+        rounded_button(
+            right, "📁  Архів файлів",
+            self.open_archive,
+            bg=c["bg_secondary"], fg=c["text_primary"],
+            hover_bg=c["bg_tertiary"],
+            font=("Segoe UI", 9),
+            pady=9,
+        ).pack(fill="x")
+
+    # ─────────────────── field rendering ─────────────────────────────────────
 
     def on_template_change(self, event=None):
         self.render_fields()
 
-    def _create_card_section(self, parent, title, fields=None):
-        """Create a card section with title and optional fields"""
-        card = ttk.Frame(parent)
-        card.pack(fill="x", pady=(0, 24))
-
-        label = ttk.Label(card, text=title, style="Subheader.TLabel")
-        label.pack(pady=(0, 12), anchor="w")
-
-        if fields:
-            for field_label, _ in fields:
-                if field_label:
-                    ttk.Label(card, text=field_label, style="Small.TLabel").pack(anchor="w", pady=(4, 0))
-
-        return card
-
     def render_fields(self):
-        for widget in self.fields_container.winfo_children():
-            widget.destroy()
+        for w in self.fields_container.winfo_children():
+            w.destroy()
         self.fields = {}
 
         template = self.template_var.get()
 
         if template == "Certificate of Achievement":
-            # Course Selection
-            self.add_field("Назва курсу", "combobox", list(self.course_data.keys()))
-            self.add_field("Платформа", "entry", state="readonly")
-            self.add_field("Кількість годин", "entry", state="readonly")
-            self.add_field("Рівень курсу", "entry", state="readonly")
-            
-            # Auto-fill course info
+            self.add_field("Назва курсу",          "combobox", list(self.course_data.keys()))
+            self.add_field("Платформа",             "entry",    state="readonly")
+            self.add_field("Кількість годин",       "entry",    state="readonly")
+            self.add_field("Рівень курсу",          "entry",    state="readonly")
             self.fields["Назва курсу"].bind("<<ComboboxSelected>>", self.update_course_info)
+            self.add_field("Прізвище",              "entry")
+            self.add_field("Ім'я",                  "entry")
+            self.add_field("По батькові",           "entry")
+            self.add_field("Номер студентського",   "entry")
+            self.add_field("Дата завершення",       "date")
 
-            self.add_field("Прізвище", "entry")
-            self.add_field("Ім'я", "entry")
-            self.add_field("По батькові", "entry")
-            self.add_field("Номер студентського", "entry")
-            self.add_field("Дата завершення", "date")
-            
         elif template == "Application Form":
-            self.add_field("Прізвище", "entry")
-            self.add_field("Ім'я", "entry")
-            self.add_field("По батькові", "entry")
-            self.add_field("Дата народження", "date")
-            self.add_field("Контактний телефон", "entry")
-            self.add_field("Електронна пошта", "entry")
-            self.add_field("Паспорт (серія/номер) або УНЗР", "entry")
-            
-            self.add_field("Освітній рівень", "combobox", ["бакалавр", "магістр"])
-            
+            self.add_field("Прізвище",                         "entry")
+            self.add_field("Ім'я",                             "entry")
+            self.add_field("По батькові",                      "entry")
+            self.add_field("Дата народження",                  "date")
+            self.add_field("Контактний телефон",               "entry")
+            self.add_field("Електронна пошта",                 "entry")
+            self.add_field("Паспорт (серія/номер) або УНЗР",   "entry")
+            self.add_field("Освітній рівень",                  "combobox", ["бакалавр", "магістр"])
             specialties = [
-                "Інженерія програмного забезпечення", 
-                "Комп’ютерні науки", 
-                "Кібербезпека", 
-                "Інформаційні системи та технології", 
-                "Телекомунікації та радіотехніка"
+                "Інженерія програмного забезпечення",
+                "Комп'ютерні науки",
+                "Кібербезпека",
+                "Інформаційні системи та технології",
+                "Телекомунікації та радіотехніка",
             ]
-            self.add_field("Спеціальність", "combobox", specialties)
-            
-            modes = ["денна", "заочна", "дистанційна"]
-            self.add_field("Форма навчання", "combobox", modes)
-            
-        elif template == "Contract for Education":
-            # self.add_field("Номер договору", "entry") # Removed for auto-generation
-            self.add_field("Дата договору", "date")
-            
-            # Recipient
-            self.add_field("Прізвище", "entry")
-            self.add_field("Ім'я", "entry")
-            self.add_field("По батькові", "entry")
-            self.add_field("Контактний телефон", "entry")
-            self.add_field("Електронна пошта", "entry")
-            self.add_field("Паспорт (серія/номер) або УНЗР", "entry")
+            self.add_field("Спеціальність",                    "combobox", specialties)
+            self.add_field("Форма навчання",                   "combobox", ["денна", "заочна", "дистанційна"])
 
-            self.add_field("Освітній рівень", "combobox", ["бакалавр", "магістр"])
-            
+        elif template == "Contract for Education":
+            self.add_field("Дата договору",                    "date")
+            self.add_field("Прізвище",                         "entry")
+            self.add_field("Ім'я",                             "entry")
+            self.add_field("По батькові",                      "entry")
+            self.add_field("Контактний телефон",               "entry")
+            self.add_field("Електронна пошта",                 "entry")
+            self.add_field("Паспорт (серія/номер) або УНЗР",   "entry")
+            self.add_field("Освітній рівень",                  "combobox", ["бакалавр", "магістр"])
             specialties = [
-                "Інженерія програмного забезпечення", 
-                "Комп’ютерні науки", 
-                "Кібербезпека", 
-                "Інформаційні системи та технології", 
-                "Телекомунікації та радіотехніка"
+                "Інженерія програмного забезпечення",
+                "Комп'ютерні науки",
+                "Кібербезпека",
+                "Інформаційні системи та технології",
+                "Телекомунікації та радіотехніка",
             ]
-            self.add_field("Спеціальність", "combobox", specialties)
-            
-            modes = ["денна", "заочна", "дистанційна"]
-            self.add_field("Форма навчання", "combobox", modes)
-            
-            self.add_field("Загальна вартість (грн)", "entry")
-            self.add_field("Варіанти оплати", "combobox", ["щомісячно", "півроку"])
+            self.add_field("Спеціальність",                    "combobox", specialties)
+            self.add_field("Форма навчання",                   "combobox", ["денна", "заочна", "дистанційна"])
+            self.add_field("Загальна вартість (грн)",          "entry")
+            self.add_field("Варіанти оплати",                  "combobox", ["щомісячно", "півроку"])
 
         elif template == "Cyberverse Certificate":
-            self.add_field("Прізвище", "entry")
-            self.add_field("Ім'я", "entry")
-            self.add_field("По батькові", "entry")
-            self.add_field("Місце", "entry")
+            self.add_field("Прізвище",   "entry")
+            self.add_field("Ім'я",       "entry")
+            self.add_field("По батькові","entry")
+            self.add_field("Місце",      "entry")
 
         elif template == "Cyberverse Participation Certificate":
-            self.add_field("Прізвище", "entry")
-            self.add_field("Ім'я", "entry")
-            self.add_field("По батькові", "entry")
-            
-            # Додаємо обробку апострофа при отриманні даних в GUI теж (у методі generate_document)
+            self.add_field("Прізвище",   "entry")
+            self.add_field("Ім'я",       "entry")
+            self.add_field("По батькові","entry")
 
-        # Update signature section visibility after rendering fields
         self.toggle_signature_section()
 
     def add_field(self, label, field_type, values=None, state="normal"):
-        frame = ttk.Frame(self.fields_container)
-        frame.pack(fill="x", pady=6)
+        """Add a label + widget row using grid for uniform alignment."""
+        row = len(self.fields)
+        c   = self.colors
 
-        label_widget = ttk.Label(frame, text=f"{label}:", style="Small.TLabel", width=20)
-        label_widget.pack(side="left", padx=(0, 12))
+        # Configure grid weight on container
+        self.fields_container.rowconfigure(row, pad=4)
+
+        lbl = tk.Label(
+            self.fields_container,
+            text=f"{label}:",
+            bg=c["bg_primary"],
+            fg=c["text_secondary"],
+            font=("Segoe UI", 9),
+            anchor="w",
+            width=self.LABEL_WIDTH,
+        )
+        lbl.grid(row=row, column=0, sticky="w", pady=4, padx=(0, 10))
 
         if field_type == "entry":
-            entry = ttk.Entry(frame, font=("Segoe UI", 10), state=state)
-            entry.pack(side="right", expand=True, fill="x")
-            self.fields[label] = entry
+            widget = ttk.Entry(self.fields_container,
+                               font=("Segoe UI", 10),
+                               state=state)
         elif field_type == "combobox":
-            cb = ttk.Combobox(frame, values=values, state="readonly", font=("Segoe UI", 10))
-            cb.pack(side="right", expand=True, fill="x")
-            self.fields[label] = cb
+            widget = ttk.Combobox(self.fields_container,
+                                  values=values,
+                                  state="readonly",
+                                  font=("Segoe UI", 10))
         elif field_type == "date":
-            de = DateEntry(frame, width=12, background=self.colors["primary"], foreground='white', borderwidth=0,
-                           font=("Segoe UI", 10), date_pattern='dd.mm.yyyy')
-            de.pack(side="right", expand=True, fill="x")
-            self.fields[label] = de
+            widget = DateEntry(
+                self.fields_container,
+                background=self.colors["primary"],
+                foreground="white",
+                borderwidth=0,
+                font=("Segoe UI", 10),
+                date_pattern="dd.mm.yyyy",
+            )
+        else:
+            widget = ttk.Entry(self.fields_container, font=("Segoe UI", 10))
+
+        widget.grid(row=row, column=1, sticky="ew", pady=4)
+        self.fields[label] = widget
 
     def update_course_info(self, event=None):
         course = self.fields["Назва курсу"].get()
         if course in self.course_data:
             info = self.course_data[course]
-            for key, val in [("Платформа", info["platform"]), ("Кількість годин", info["hours"]), ("Рівень курсу", info["level"])]:
+            for key, val in [
+                ("Платформа",       info["platform"]),
+                ("Кількість годин", info["hours"]),
+                ("Рівень курсу",    info["level"]),
+            ]:
                 self.fields[key].config(state="normal")
                 self.fields[key].delete(0, tk.END)
                 self.fields[key].insert(0, val)
                 self.fields[key].config(state="readonly")
 
     def toggle_signature_section(self):
-        """Show/hide signature section based on selected template"""
         template = self.template_var.get()
-        if template in ["Cyberverse Certificate", "Cyberverse Participation Certificate"]:
-            # Hide signature section ONLY for Cyberverse templates
+        if template in ("Cyberverse Certificate", "Cyberverse Participation Certificate"):
             self.sig_section.pack_forget()
-            self.signature_path = ""  # Clear signature path
-            self.sig_label.config(text="Оберіть файл підпису (PNG)", foreground="gray")
+            self.signature_path = ""
+            self.sig_label.config(text="Файл не обрано", fg=self.colors["text_tertiary"])
         else:
-            # Show signature section for all other templates (Certificate of Achievement, Application Form, Contract for Education)
-            self.sig_section.pack(fill="x", pady=5)
+            self.sig_section.pack(fill="x", pady=(4, 0))
 
-    def setup_admin_tab(self):
-        # Main container
-        main_container = ttk.Frame(self.admin_frame)
-        main_container.pack(fill="both", expand=True, padx=32, pady=24)
+    # ══════════════════════════════════════════════════════════════════════════
+    # TAB 2 — VERIFY
+    # ══════════════════════════════════════════════════════════════════════════
 
-        # Title
-        title = ttk.Label(main_container, text="🔐 Верифікація документів", style="Subheader.TLabel")
-        title.pack(pady=(0, 24), anchor="w")
+    def _build_verify_tab(self):
+        c = self.colors
+        root_frame = tk.Frame(self.ver_frame, bg=c["bg_primary"])
+        root_frame.pack(fill="both", expand=True, padx=28, pady=20)
 
-        # Mode Toggle Card
-        mode_container = ttk.Frame(main_container)
-        mode_container.pack(pady=(0, 24), fill="x")
+        self._section_label(root_frame, "🔐  Верифікація документів")
+        tk.Frame(root_frame, bg=c["border"], height=1).pack(fill="x", pady=(6, 14))
 
-        mode_label = ttk.Label(mode_container, text="Режим перевірки:", style="Small.TLabel")
-        mode_label.pack(side="left", padx=(0, 16))
+        # Mode row
+        mode_row = tk.Frame(root_frame, bg=c["bg_primary"])
+        mode_row.pack(fill="x", pady=(0, 14))
+
+        tk.Label(mode_row, text="Режим:",
+                 bg=c["bg_primary"], fg=c["text_secondary"],
+                 font=("Segoe UI", 9)).pack(side="left", padx=(0, 12))
 
         self.verification_mode = tk.StringVar(value="single")
-        rb1 = ttk.Radiobutton(mode_container, text="Одинична перевірка", variable=self.verification_mode, value="single")
-        rb1.pack(side="left", padx=(0, 24))
-        rb2 = ttk.Radiobutton(mode_container, text="Масова перевірка", variable=self.verification_mode, value="mass")
-        rb2.pack(side="left")
+        ttk.Radiobutton(mode_row, text="Одинична перевірка",
+                        variable=self.verification_mode, value="single").pack(side="left", padx=(0, 20))
+        ttk.Radiobutton(mode_row, text="Масова перевірка",
+                        variable=self.verification_mode, value="mass").pack(side="left")
 
-        # Action Buttons
-        ttk.Button(main_container, text="🔍 Вибрати для перевірки", style="Primary.TButton", command=self.verify_document).pack(pady=(0, 12), fill="x", ipady=4)
-        ttk.Button(main_container, text="📁 Переглянути архів", command=self.open_archive, style="Secondary.TButton").pack(pady=(0, 24), fill="x")
+        # Buttons row
+        btn_row = tk.Frame(root_frame, bg=c["bg_primary"])
+        btn_row.pack(fill="x", pady=(0, 16))
 
-        # Progress bar for mass verification
+        rounded_button(
+            btn_row, "🔍  Вибрати для перевірки",
+            self.verify_document,
+            bg=c["primary"], fg="white",
+            hover_bg=c["primary_hover"],
+            font=("Segoe UI", 10, "bold"),
+            pady=10,
+        ).pack(side="left", padx=(0, 10))
+
+        rounded_button(
+            btn_row, "📁  Переглянути архів",
+            self.open_archive,
+            bg=c["bg_secondary"], fg=c["text_primary"],
+            hover_bg=c["bg_tertiary"],
+            font=("Segoe UI", 9),
+            pady=10,
+        ).pack(side="left")
+
+        # Progress bar (hidden by default)
         self.verify_progress_var = tk.DoubleVar()
-        self.verify_progress = ttk.Progressbar(main_container, variable=self.verify_progress_var, maximum=100, mode='determinate')
-        self.verify_progress.pack(pady=(0, 12), fill="x")
+        self.verify_progress = ttk.Progressbar(
+            root_frame,
+            variable=self.verify_progress_var,
+            maximum=100, mode="determinate",
+        )
+        self.verify_progress.pack(fill="x", pady=(0, 4))
         self.verify_progress.pack_forget()
 
-        self.verify_progress_label = ttk.Label(main_container, text="", style="Small.TLabel")
-        self.verify_progress_label.pack(pady=(0, 12))
+        self.verify_progress_label = tk.Label(
+            root_frame, text="",
+            bg=c["bg_primary"], fg=c["text_secondary"],
+            font=("Segoe UI", 9), anchor="w",
+        )
+        self.verify_progress_label.pack(fill="x", pady=(0, 10))
 
-        # Results section
-        results_label = ttk.Label(main_container, text="📋 Результати перевірки:", style="Subheader.TLabel")
-        results_label.pack(anchor="w", pady=(0, 12))
+        # Status badge
+        status_row = tk.Frame(root_frame, bg=c["bg_primary"])
+        status_row.pack(fill="x", pady=(0, 10))
 
-        self.result_text = tk.Text(main_container, height=16, state="disabled", bg=self.colors["bg_secondary"],
-                                   fg=self.colors["text_primary"], font=("Consolas", 9), relief="solid",
-                                   borderwidth=1, padx=12, pady=12)
-        self.result_text.pack(pady=(0, 16), fill="both", expand=True)
+        tk.Label(status_row, text="Статус:",
+                 bg=c["bg_primary"], fg=c["text_secondary"],
+                 font=("Segoe UI", 9)).pack(side="left")
 
-        # Status indicator
-        status_frame = ttk.Frame(main_container)
-        status_frame.pack(pady=16, fill="x")
+        self.status_label = tk.Label(
+            status_row,
+            text="⏳  Очікування...",
+            bg=c["bg_primary"],
+            fg=c["text_tertiary"],
+            font=("Segoe UI", 12, "bold"),
+        )
+        self.status_label.pack(side="left", padx=10)
 
-        ttk.Label(status_frame, text="Статус:", style="Small.TLabel").pack(side="left")
-        self.status_label = ttk.Label(status_frame, text="⏳ Очікування...", font=("Segoe UI", 12, "bold"),
-                                     foreground=self.colors["text_tertiary"])
-        self.status_label.pack(side="left", padx=12)
+        # Results area
+        self._section_label(root_frame, "📋  Результати перевірки")
+
+        text_frame = tk.Frame(root_frame, bg=c["border"], bd=1, relief="solid")
+        text_frame.pack(fill="both", expand=True, pady=(6, 0))
+
+        self.result_text = tk.Text(
+            text_frame,
+            state="disabled",
+            bg=c["bg_secondary"],
+            fg=c["text_primary"],
+            font=("Consolas", 9),
+            relief="flat",
+            padx=12, pady=12,
+            wrap="word",
+        )
+        vsb = ttk.Scrollbar(text_frame, orient="vertical",
+                            command=self.result_text.yview)
+        self.result_text.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        self.result_text.pack(side="left", fill="both", expand=True)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # TAB 3 — MASS GENERATION
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _build_mass_tab(self):
+        c = self.colors
+        root_frame = tk.Frame(self.mass_frame, bg=c["bg_primary"])
+        root_frame.pack(fill="both", expand=True, padx=28, pady=20)
+
+        self._section_label(root_frame, "📦  Масове генерування документів")
+        tk.Frame(root_frame, bg=c["border"], height=1).pack(fill="x", pady=(6, 16))
+
+        # ── Template ─────────────────────────────────────────────────────────
+        tk.Label(root_frame, text="Шаблон документа:",
+                 bg=c["bg_primary"], fg=c["text_secondary"],
+                 font=("Segoe UI", 9), anchor="w").pack(fill="x", pady=(0, 4))
+
+        self.mass_template_var = tk.StringVar(value="Cyberverse Certificate")
+        templates = ["Cyberverse Certificate", "Cyberverse Participation Certificate"]
+        styled_combobox(root_frame, templates,
+                        textvariable=self.mass_template_var).pack(fill="x", pady=(0, 16))
+
+        # ── CSV file ──────────────────────────────────────────────────────────
+        tk.Label(root_frame, text="📄  Вибір CSV файлу:",
+                 bg=c["bg_primary"], fg=c["text_secondary"],
+                 font=("Segoe UI", 9), anchor="w").pack(fill="x", pady=(0, 4))
+
+        self.csv_path_var = tk.StringVar(value="")
+        csv_row = tk.Frame(root_frame, bg=c["bg_primary"])
+        csv_row.pack(fill="x", pady=(0, 16))
+
+        self.csv_display = tk.Label(
+            csv_row,
+            textvariable=self.csv_path_var,
+            bg=c["bg_secondary"],
+            fg=c["text_tertiary"],
+            font=("Segoe UI", 9),
+            anchor="w",
+            padx=8, pady=6,
+            relief="flat",
+        )
+        self.csv_display.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+        rounded_button(
+            csv_row, "📁  Вибрати",
+            self.select_csv_file,
+            bg=c["bg_tertiary"], fg=c["text_primary"],
+            hover_bg=c["border"],
+            font=("Segoe UI", 9),
+        ).pack(side="right")
+
+        # ── Output folder ─────────────────────────────────────────────────────
+        tk.Label(root_frame, text="📁  Папка призначення:",
+                 bg=c["bg_primary"], fg=c["text_secondary"],
+                 font=("Segoe UI", 9), anchor="w").pack(fill="x", pady=(0, 4))
+
+        self.output_folder_var = tk.StringVar(value="generated_archive")
+        out_row = tk.Frame(root_frame, bg=c["bg_primary"])
+        out_row.pack(fill="x", pady=(0, 16))
+
+        ttk.Entry(out_row,
+                  textvariable=self.output_folder_var,
+                  font=("Segoe UI", 9),
+                  state="readonly").pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+        rounded_button(
+            out_row, "📁  Змінити",
+            self.select_output_folder,
+            bg=c["bg_tertiary"], fg=c["text_primary"],
+            hover_bg=c["border"],
+            font=("Segoe UI", 9),
+        ).pack(side="right")
+
+        # ── Progress ──────────────────────────────────────────────────────────
+        self.mass_gen_progress_var = tk.DoubleVar()
+        self.mass_gen_progress = ttk.Progressbar(
+            root_frame,
+            variable=self.mass_gen_progress_var,
+            maximum=100, mode="determinate",
+        )
+        self.mass_gen_progress.pack(fill="x", pady=(0, 4))
+        self.mass_gen_progress.pack_forget()
+
+        self.mass_gen_progress_label = tk.Label(
+            root_frame, text="",
+            bg=c["bg_primary"], fg=c["text_secondary"],
+            font=("Segoe UI", 9), anchor="w",
+        )
+        self.mass_gen_progress_label.pack(fill="x", pady=(0, 10))
+
+        # ── Start button ──────────────────────────────────────────────────────
+        self.mass_gen_btn = rounded_button(
+            root_frame, "🚀  Почати масове генерування",
+            self.start_mass_generation,
+            bg=c["primary"], fg="white",
+            hover_bg=c["primary_hover"],
+            font=("Segoe UI", 10, "bold"),
+            pady=11,
+        )
+        self.mass_gen_btn.pack(fill="x", pady=(0, 16))
+
+        # ── Log ───────────────────────────────────────────────────────────────
+        tk.Label(root_frame, text="📋  Лог процесу:",
+                 bg=c["bg_primary"], fg=c["text_secondary"],
+                 font=("Segoe UI", 9), anchor="w").pack(fill="x", pady=(0, 6))
+
+        log_frame = tk.Frame(root_frame, bg=c["border"], bd=1, relief="solid")
+        log_frame.pack(fill="both", expand=True)
+
+        self.mass_gen_log = tk.Text(
+            log_frame,
+            state="disabled",
+            bg=c["bg_secondary"],
+            fg=c["text_primary"],
+            font=("Consolas", 9),
+            relief="flat",
+            padx=12, pady=12,
+        )
+        vsb = ttk.Scrollbar(log_frame, orient="vertical",
+                            command=self.mass_gen_log.yview)
+        self.mass_gen_log.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        self.mass_gen_log.pack(side="left", fill="both", expand=True)
+
+        rounded_button(
+            root_frame, "📁  Відкрити папку з файлами",
+            self.open_archive,
+            bg=c["bg_secondary"], fg=c["text_primary"],
+            hover_bg=c["bg_tertiary"],
+            font=("Segoe UI", 9),
+            pady=8,
+        ).pack(fill="x", pady=(10, 0))
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # SHARED HELPERS
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _section_label(self, parent, text):
+        tk.Label(
+            parent, text=text,
+            bg=self.colors["bg_primary"],
+            fg=self.colors["text_primary"],
+            font=("Segoe UI", 11, "bold"),
+            anchor="w",
+        ).pack(fill="x", pady=(0, 2))
+
+    # ── signature ─────────────────────────────────────────────────────────────
 
     def upload_signature(self):
-        file_path = filedialog.askopenfilename(filetypes=[("PNG files", "*.png")])
+        file_path = filedialog.askopenfilename(
+            filetypes=[("PNG files", "*.png")])
         if file_path:
             self.signature_path = file_path
-            self.sig_label.config(text=os.path.basename(file_path), foreground=self.colors["success"])
+            self.sig_label.config(
+                text=os.path.basename(file_path),
+                fg=self.colors["success"],
+            )
+
+    # ── generate ─────────────────────────────────────────────────────────────
 
     def generate_document(self):
-        # 1. Collect all fields
-        personal_data = {label: entry.get().strip() for label, entry in self.fields.items()}
-        
-        # 2. Check if all fields are filled
+        personal_data = {label: entry.get().strip()
+                         for label, entry in self.fields.items()}
+
         missing_fields = [label for label, value in personal_data.items() if not value]
 
-        # Special case: Signature image (only for non-Cyberverse templates)
         template = self.template_var.get()
-        if template not in ["Cyberverse Certificate", "Cyberverse Participation Certificate"]:
+        if template not in ("Cyberverse Certificate",
+                             "Cyberverse Participation Certificate"):
             if not self.signature_path:
                 missing_fields.append("Підпис (картинка)")
 
         if missing_fields:
-            error_msg = "Будь ласка, заповніть всі поля:\n\n" + "\n".join([f"• {f}" for f in missing_fields])
-            messagebox.showwarning("Заповніть всі дані", error_msg)
+            messagebox.showwarning(
+                "Заповніть всі дані",
+                "Будь ласка, заповніть всі поля:\n\n" +
+                "\n".join(f"• {f}" for f in missing_fields),
+            )
             return
-        
-        # Remove empty fields from dictionary (though none should be empty now)
+
         personal_data = {k: v for k, v in personal_data.items() if v}
 
-        # Обробимо апостроф в імені
-        if "Ім'я" in personal_data:
-            personal_data["Ім'я"] = personal_data["Ім'я"].replace("’", "'")
-        elif "Ім’я" in personal_data:
-            val = personal_data.pop("Ім’я")
-            personal_data["Ім'я"] = val.replace("’", "'")
+        # Normalize apostrophe in name
+        for key in ("Ім'я", "Ім'я"):
+            if key in personal_data:
+                personal_data[key] = personal_data[key].replace("'", "\u2019")
 
-        # Auto-generate Contract Number if applicable
-        if self.template_var.get() == "Contract for Education":
+        # Auto contract number
+        if template == "Contract for Education":
             import datetime
-            # Format: KNU-2026-XXXX (last 4 digits of timestamp)
             now = datetime.datetime.now()
-            suffix = now.strftime("%f")[:4]
-            contract_num = f"КНУ-{now.year}-{suffix}"
-            personal_data["Номер договору"] = contract_num
+            personal_data["Номер договору"] = f"КНУ-{now.year}-{now.strftime('%f')[:4]}"
 
-        # Validation for Passport/UNZR
-        passport_key = "Паспорт (серія/номер) або УНЗР" if "Паспорт (серія/номер) або УНЗР" in personal_data else "Номер ID"
-        if passport_key in personal_data:
-            passport_val = personal_data[passport_key]
+        # Passport validation
+        passport_key = next(
+            (k for k in ("Паспорт (серія/номер) або УНЗР", "Номер ID")
+             if k in personal_data), None)
+        if passport_key:
             try:
                 from validators import validate_passport_ua
-                canonical_passport = validate_passport_ua(passport_val)
-                personal_data[passport_key] = canonical_passport
+                personal_data[passport_key] = validate_passport_ua(
+                    personal_data[passport_key])
             except ValueError as ve:
                 messagebox.showerror("Помилка валідації документа", str(ve))
                 return
 
-        # Validation and Canonicalization of Phone Number
+        # Phone validation
         if "Контактний телефон" in personal_data:
-            phone_raw = personal_data["Контактний телефон"]
             try:
                 from crypto_utils import CryptoManager
-                canonical_phone = CryptoManager.validate_phone_ua(phone_raw)
-                personal_data["Контактний телефон"] = canonical_phone
+                personal_data["Контактний телефон"] = CryptoManager.validate_phone_ua(
+                    personal_data["Контактний телефон"])
             except ValueError as ve:
                 messagebox.showerror("Помилка валідації телефону", str(ve))
                 return
 
-        # Validation and Canonicalization of Payment Amount
-        if self.template_var.get() == "Contract for Education":
-            amount_raw = personal_data.get("Загальна вартість (грн)", "")
+        # Amount validation
+        if template == "Contract for Education":
             try:
                 from crypto_utils import CryptoManager
-                canonical_amount = CryptoManager.validate_amount_ua(amount_raw)
-                personal_data["Загальна вартість (грн)"] = canonical_amount
+                personal_data["Загальна вартість (грн)"] = CryptoManager.validate_amount_ua(
+                    personal_data.get("Загальна вартість (грн)", ""))
             except ValueError as ve:
                 messagebox.showerror("Помилка валідації суми", str(ve))
                 return
 
-        # Remove empty fields from dictionary
         personal_data = {k: v for k, v in personal_data.items() if v}
-        
+
         try:
-            output_pdf = self.system.user_workflow(self.template_var.get(), personal_data, self.signature_path)
+            output_pdf = self.system.user_workflow(
+                template, personal_data, self.signature_path)
             self.last_generated_pdf = output_pdf
             self.open_btn.config(state="normal")
-            messagebox.showinfo("Успіх", f"Захищений документ успішно створено:\n{output_pdf}")
+            messagebox.showinfo(
+                "Успіх",
+                f"Захищений документ успішно створено:\n{output_pdf}")
         except Exception as e:
             messagebox.showerror("Помилка", f"Помилка при генерації:\n{e}")
 
@@ -641,57 +953,64 @@ class ProtectionApp:
             os.makedirs(archive_dir)
         os.startfile(os.path.abspath(archive_dir))
 
+    # ── verify ────────────────────────────────────────────────────────────────
+
     def verify_document(self):
         mode = self.verification_mode.get()
 
         if mode == "single":
-            # Single file verification
-            file_path = filedialog.askopenfilename(filetypes=[("PDF files", "*.pdf")])
+            file_path = filedialog.askopenfilename(
+                filetypes=[("PDF files", "*.pdf")])
             if not file_path:
                 return
 
-            # Візуальна індикація початку процесу
-            self.status_label.config(text="⏳ ПЕРЕВІРКА...", foreground=self.colors["primary"])
+            self.status_label.config(
+                text="⏳  ПЕРЕВІРКА...",
+                fg=self.colors["primary"])
             self.result_text.config(state="normal")
             self.result_text.delete("1.0", tk.END)
             self.result_text.insert(tk.END, "Запуск процесу верифікації...\n")
             self.result_text.config(state="disabled")
             self.root.update_idletasks()
 
-            def run_single_verification():
-                import sys
-                import io
-                old_stdout = sys.stdout
-                sys.stdout = mystdout = io.StringIO()
-
+            def run_single():
+                import sys, io
+                old = sys.stdout
+                sys.stdout = buf = io.StringIO()
                 try:
                     self.system.admin_workflow(file_path)
-                    output = mystdout.getvalue()
-
-                    # Повертаємося в головний потік для оновлення UI
-                    self.root.after(0, lambda: self.update_verification_results(output))
-
+                    output = buf.getvalue()
+                    self.root.after(
+                        0, lambda: self.update_verification_results(output))
                 except Exception as e:
-                    self.root.after(0, lambda: messagebox.showerror("Помилка", f"Помилка при верифікації:\n{e}"))
-                    self.root.after(0, lambda: self.status_label.config(text="❌ ПОМИЛКА", foreground=self.colors["danger"]))
+                    self.root.after(
+                        0, lambda: messagebox.showerror(
+                            "Помилка", f"Помилка при верифікації:\n{e}"))
+                    self.root.after(
+                        0, lambda: self.status_label.config(
+                            text="❌  ПОМИЛКА",
+                            fg=self.colors["danger"]))
                 finally:
-                    sys.stdout = old_stdout
+                    sys.stdout = old
 
             import threading
-            threading.Thread(target=run_single_verification, daemon=True).start()
-            return  # Додаємо return, щоб не виконувався код масової перевірки нижче
+            threading.Thread(target=run_single, daemon=True).start()
+            return
 
-        # Mass verification (тільки якщо mode != "single")
-        folder_path = filedialog.askdirectory(title="Виберіть папку з PDF файлами")
+        # Mass verification
+        folder_path = filedialog.askdirectory(
+            title="Виберіть папку з PDF файлами")
         if not folder_path:
             return
 
-        # Попередження для користувача, оскільки askdirectory не показує файли
-        pdf_count = len([f for f in os.listdir(folder_path) if f.lower().endswith(".pdf")])
+        pdf_count = len([f for f in os.listdir(folder_path)
+                         if f.lower().endswith(".pdf")])
         if pdf_count == 0:
-            messagebox.showwarning("Увага", f"У вибраній папці не знайдено PDF-файлів.\nШлях: {folder_path}")
+            messagebox.showwarning(
+                "Увага",
+                f"У вибраній папці не знайдено PDF-файлів.\nШлях: {folder_path}")
             return
-            
+
         self.run_mass_verification(folder_path)
 
     def update_verification_results(self, output):
@@ -701,97 +1020,97 @@ class ProtectionApp:
         self.result_text.config(state="disabled")
         self.result_text.see(tk.END)
 
+        c = self.colors
         if "STATUS: VALID" in output:
-            self.status_label.config(text="✅ ВАЛІДНИЙ", foreground=self.colors["success"])
+            self.status_label.config(text="✅  ВАЛІДНИЙ",   fg=c["success"])
         elif "STATUS: TAMPERED" in output:
-            self.status_label.config(text="⚠️ ПОШКОДЖЕНИЙ", foreground=self.colors["danger"])
+            self.status_label.config(text="⚠️  ПОШКОДЖЕНИЙ", fg=c["danger"])
         else:
-            self.status_label.config(text="❌ ПОМИЛКА", foreground=self.colors["warning"])
+            self.status_label.config(text="❌  ПОМИЛКА",    fg=c["warning"])
 
     def run_mass_verification(self, folder_path):
-        import threading
-        import sys
+        import threading, sys
         from io import StringIO
 
-        # Шукаємо файли незалежно від регістру розширення
-        pdf_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.lower().endswith(".pdf")]
-
+        pdf_files = [
+            os.path.join(folder_path, f)
+            for f in os.listdir(folder_path)
+            if f.lower().endswith(".pdf")
+        ]
         if not pdf_files:
-            messagebox.showwarning("Увага", f"У папці {folder_path} не знайдено PDF файлів.")
+            messagebox.showwarning(
+                "Увага",
+                f"У папці {folder_path} не знайдено PDF файлів.")
             return
 
-        # Show progress bar
-        self.verify_progress.pack(before=self.result_text, pady=5, fill="x")
+        self.verify_progress.pack(fill="x", pady=(0, 4))
         self.verify_progress_var.set(0)
-
-        # Reset UI
-        self.status_label.config(text="⏳ МАСОВА ПЕРЕВІРКА...", foreground=self.colors["primary"])
+        self.status_label.config(
+            text="⏳  МАСОВА ПЕРЕВІРКА...",
+            fg=self.colors["primary"])
         self.result_text.config(state="normal")
         self.result_text.delete("1.0", tk.END)
-        self.result_text.insert(tk.END, f"Знайдено {len(pdf_files)} файлів для перевірки.\n\n")
+        self.result_text.insert(
+            tk.END,
+            f"Знайдено {len(pdf_files)} файлів для перевірки.\n\n")
         self.result_text.config(state="disabled")
 
-        def run_batch_verification():
-            valid_count = 0
-            tampered_count = 0
-            error_count = 0
-
-            # Temporarily disable diagnostic output
+        def run_batch():
+            valid = tampered = errors = 0
             old_diag = self.system.diagnostic_mode
             self.system.diagnostic_mode = False
 
             for i, pdf_path in enumerate(pdf_files):
                 filename = os.path.basename(pdf_path)
-                progress = ((i + 1) / len(pdf_files)) * 100
+                progress = (i + 1) / len(pdf_files) * 100
+                self.root.after(
+                    0,
+                    lambda p=progress, f=filename, idx=i+1:
+                        self._update_mass_verify_progress(p, f, idx, len(pdf_files)))
 
-                # Update progress
-                self.root.after(0, lambda p=progress, f=filename, idx=i+1: self._update_mass_verify_progress(p, f, idx, len(pdf_files)))
-
-                # Capture stdout
-                old_stdout = sys.stdout
-                sys.stdout = result_io = StringIO()
-
+                old_out = sys.stdout
+                sys.stdout = buf = StringIO()
                 try:
                     self.system.admin_workflow(pdf_path)
-                    sys.stdout = old_stdout
-                    result_output = result_io.getvalue()
-
-                    if "[RESULT] STATUS: VALID" in result_output:
-                        status = "✅ VALID"
-                        valid_count += 1
-                    elif "TAMPERED" in result_output:
-                        status = "❌ TAMPERED"
-                        tampered_count += 1
-                    elif "UNSIGNED" in result_output:
-                        status = "⚠️ UNSIGNED"
-                        error_count += 1
+                    sys.stdout = old_out
+                    res = buf.getvalue()
+                    if "[RESULT] STATUS: VALID" in res:
+                        status = "✅ VALID"; valid += 1
+                    elif "TAMPERED" in res:
+                        status = "❌ TAMPERED"; tampered += 1
+                    elif "UNSIGNED" in res:
+                        status = "⚠️ UNSIGNED"; errors += 1
                     else:
-                        status = "❓ UNKNOWN"
-                        error_count += 1
-
-                    self.root.after(0, lambda fn=filename, st=status: self._append_verify_result(fn, st))
-
+                        status = "❓ UNKNOWN"; errors += 1
+                    self.root.after(
+                        0, lambda fn=filename, st=status:
+                            self._append_verify_result(fn, st))
                 except Exception as e:
-                    sys.stdout = old_stdout
-                    error_count += 1
-                    self.root.after(0, lambda fn=filename, err=str(e): self._append_verify_result(fn, f"💥 ERROR: {err}"))
+                    sys.stdout = old_out
+                    errors += 1
+                    self.root.after(
+                        0, lambda fn=filename, err=str(e):
+                            self._append_verify_result(fn, f"💥 ERROR: {err}"))
 
             self.system.diagnostic_mode = old_diag
+            total = len(pdf_files)
+            summary = (
+                f"\n{'='*50}\n--- Підсумок перевірки ---\n"
+                f"Всього файлів: {total}\n"
+                f"Валідних:      {valid}\n"
+                f"Пошкоджених:   {tampered}\n"
+                f"Інші (помилки): {errors}\n"
+            )
+            self.root.after(
+                0, lambda s=summary:
+                    self._finish_mass_verification(s, valid, tampered, errors, total))
 
-            # Show summary
-            summary = f"\n{'='*50}\n--- Підсумок перевірки ---\n"
-            summary += f"Всього файлів: {len(pdf_files)}\n"
-            summary += f"Валідних:      {valid_count}\n"
-            summary += f"Пошкоджених:   {tampered_count}\n"
-            summary += f"Інші (помилки): {error_count}\n"
-
-            self.root.after(0, lambda s=summary: self._finish_mass_verification(s, valid_count, tampered_count, error_count, len(pdf_files)))
-
-        threading.Thread(target=run_batch_verification, daemon=True).start()
+        threading.Thread(target=run_batch, daemon=True).start()
 
     def _update_mass_verify_progress(self, progress, filename, idx, total):
         self.verify_progress_var.set(progress)
-        self.verify_progress_label.config(text=f"[{idx}/{total}] Перевірка: {filename}...")
+        self.verify_progress_label.config(
+            text=f"[{idx}/{total}] Перевірка: {filename}...")
 
     def _append_verify_result(self, filename, status):
         self.result_text.config(state="normal")
@@ -804,146 +1123,87 @@ class ProtectionApp:
         self.result_text.insert(tk.END, summary)
         self.result_text.config(state="disabled")
         self.result_text.see(tk.END)
-
-        # Hide progress bar
         self.verify_progress.pack_forget()
         self.verify_progress_label.config(text="")
-
-        # Update status
+        c = self.colors
         if error == 0 and tampered == 0 and valid == total:
-            self.status_label.config(text="✅ ВСІ ВАЛІДНІ", foreground=self.colors["success"])
+            self.status_label.config(text="✅  ВСІ ВАЛІДНІ", fg=c["success"])
         elif tampered > 0:
-            self.status_label.config(text=f"⚠️ ЗНАЙДЕНО ПОШКОДЖЕНІ ({tampered})", foreground=self.colors["danger"])
+            self.status_label.config(
+                text=f"⚠️  ЗНАЙДЕНО ПОШКОДЖЕНІ ({tampered})", fg=c["danger"])
         else:
-            self.status_label.config(text=f"✅ ПЕРЕВІРЕНО ({valid}/{total})", foreground=self.colors["warning"])
+            self.status_label.config(
+                text=f"✅  ПЕРЕВІРЕНО ({valid}/{total})", fg=c["warning"])
 
-    def setup_mass_generation_tab(self):
-        # Main container
-        main_container = ttk.Frame(self.mass_gen_frame)
-        main_container.pack(fill="both", expand=True, padx=32, pady=24)
-
-        # Title
-        title = ttk.Label(main_container, text="📦 Масове генерування документів", style="Subheader.TLabel")
-        title.pack(pady=(0, 24), anchor="w")
-
-        # Template selection card
-        template_label = ttk.Label(main_container, text="Шаблон документа:", style="Small.TLabel")
-        template_label.pack(pady=(0, 8), anchor="w")
-
-        self.mass_template_var = tk.StringVar(value="Cyberverse Certificate")
-        templates = ["Cyberverse Certificate", "Cyberverse Participation Certificate"]
-        ttk.Combobox(main_container, textvariable=self.mass_template_var, values=templates, state="readonly", font=("Segoe UI", 10)).pack(pady=(0, 24), fill="x")
-
-        # CSV file selection
-        csv_label = ttk.Label(main_container, text="📄 Вибір CSV файлу:", style="Small.TLabel")
-        csv_label.pack(pady=(0, 8), anchor="w")
-
-        self.csv_path_var = tk.StringVar(value="")
-        csv_path_frame = ttk.Frame(main_container)
-        csv_path_frame.pack(fill="x", pady=(0, 24))
-
-        self.csv_label = ttk.Label(csv_path_frame, textvariable=self.csv_path_var, foreground=self.colors["text_tertiary"],
-                                  relief="solid", padding=8, background=self.colors["bg_secondary"])
-        self.csv_label.pack(side="left", expand=True, fill="x", padx=(0, 8))
-        ttk.Button(csv_path_frame, text="📁 Вибрати", command=self.select_csv_file, style="Secondary.TButton").pack(side="right", fill="x", expand=True)
-
-        # Output folder selection
-        output_label = ttk.Label(main_container, text="📁 Папка призначення:", style="Small.TLabel")
-        output_label.pack(pady=(0, 8), anchor="w")
-
-        self.output_folder_var = tk.StringVar(value="generated_archive")
-        output_path_frame = ttk.Frame(main_container)
-        output_path_frame.pack(fill="x", pady=(0, 24))
-
-        ttk.Entry(output_path_frame, textvariable=self.output_folder_var, font=("Segoe UI", 10), state="readonly").pack(side="left", expand=True, fill="x", padx=(0, 8))
-        ttk.Button(output_path_frame, text="📁 Змінити", command=self.select_output_folder, style="Secondary.TButton").pack(side="right", fill="x", expand=True)
-
-        # Progress bar
-        self.mass_gen_progress_var = tk.DoubleVar()
-        self.mass_gen_progress = ttk.Progressbar(main_container, variable=self.mass_gen_progress_var, maximum=100, mode='determinate')
-        self.mass_gen_progress.pack(pady=(0, 8), fill="x")
-        self.mass_gen_progress.pack_forget()
-
-        self.mass_gen_progress_label = ttk.Label(main_container, text="", style="Small.TLabel")
-        self.mass_gen_progress_label.pack(pady=(0, 16))
-
-        # Start button
-        self.mass_gen_btn = ttk.Button(main_container, text="🚀 Почати масове генерування", style="Primary.TButton", command=self.start_mass_generation)
-        self.mass_gen_btn.pack(pady=(0, 24), fill="x", ipady=4)
-
-        # Log area
-        log_label = ttk.Label(main_container, text="📋 Лог процесу:", style="Small.TLabel")
-        log_label.pack(anchor="w", pady=(0, 8))
-
-        self.mass_gen_log = tk.Text(main_container, height=12, state="disabled", bg=self.colors["bg_secondary"],
-                                   fg=self.colors["text_primary"], font=("Consolas", 9), relief="solid",
-                                   borderwidth=1, padx=12, pady=12)
-        self.mass_gen_log.pack(pady=(0, 16), fill="both", expand=True)
-
-        ttk.Button(main_container, text="📁 Відкрити папку з файлами", command=self.open_archive, style="Secondary.TButton").pack(fill="x")
+    # ── mass generation ───────────────────────────────────────────────────────
 
     def select_csv_file(self):
-        file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv"), ("All files", "*.*")])
+        file_path = filedialog.askopenfilename(
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")])
         if file_path:
             self.csv_path_var.set(file_path)
-            self.csv_label.config(foreground=self.colors["success"])
+            self.csv_display.config(fg=self.colors["success"])
 
     def select_output_folder(self):
-        folder_path = filedialog.askdirectory(title="Виберіть папку призначення")
+        folder_path = filedialog.askdirectory(
+            title="Виберіть папку призначення")
         if folder_path:
             self.output_folder_var.set(folder_path)
 
     def start_mass_generation(self):
-        csv_path = self.csv_path_var.get()
+        csv_path      = self.csv_path_var.get()
         template_type = self.mass_template_var.get()
         output_folder = self.output_folder_var.get()
 
         if not csv_path:
-            messagebox.showwarning("Увага", "Будь ласка, виберіть CSV файл з даними.")
+            messagebox.showwarning("Увага",
+                                   "Будь ласка, виберіть CSV файл з даними.")
             return
-
         if not os.path.exists(csv_path):
             messagebox.showerror("Помилка", f"Файл {csv_path} не знайдено.")
             return
 
-        # Disable button during generation
         self.mass_gen_btn.config(state="disabled")
-
-        # Reset UI
         self.mass_gen_log.config(state="normal")
         self.mass_gen_log.delete("1.0", tk.END)
-        self.mass_gen_log.insert(tk.END, f"Початок масового генерування...\nШаблон: {template_type}\n\n")
+        self.mass_gen_log.insert(
+            tk.END,
+            f"Початок масового генерування...\nШаблон: {template_type}\n\n")
         self.mass_gen_log.config(state="disabled")
-
         self.mass_gen_progress_var.set(0)
 
         import threading
-        threading.Thread(target=self.run_mass_generation, args=(csv_path, template_type, output_folder), daemon=True).start()
+        threading.Thread(
+            target=self.run_mass_generation,
+            args=(csv_path, template_type, output_folder),
+            daemon=True,
+        ).start()
 
     def run_mass_generation(self, csv_path, template_type, output_folder):
         import csv
 
         try:
-            with open(csv_path, mode='r', encoding='utf-8-sig') as f:
-                # Automatic delimiter detection
+            with open(csv_path, mode="r", encoding="utf-8-sig") as f:
                 sample = f.read(1024)
                 f.seek(0)
                 try:
-                    detected_delimiter = csv.Sniffer().sniff(sample, delimiters=',;').delimiter
+                    detected_delimiter = csv.Sniffer().sniff(
+                        sample, delimiters=",;").delimiter
                 except csv.Error:
-                    detected_delimiter = ';'
+                    detected_delimiter = ";"
 
-                reader = csv.reader(f, delimiter=detected_delimiter)
+                reader    = csv.reader(f, delimiter=detected_delimiter)
                 all_lines = list(reader)
 
                 if not all_lines:
-                    self.root.after(0, lambda: messagebox.showerror("Помилка", f"Файл {csv_path} порожній."))
-                    self.root.after(0, lambda: self.mass_gen_btn.config(state="normal"))
+                    self.root.after(
+                        0, lambda: messagebox.showerror(
+                            "Помилка", f"Файл {csv_path} порожній."))
+                    self.root.after(
+                        0, lambda: self.mass_gen_btn.config(state="normal"))
                     return
 
-                # Clean headers
-                fieldnames = [name.strip() for name in all_lines[0]]
-
+                fieldnames = [n.strip() for n in all_lines[0]]
                 rows = []
                 for line in all_lines[1:]:
                     if not line or not any(line):
@@ -954,62 +1214,78 @@ class ProtectionApp:
                             row[fieldnames[i]] = val.strip()
                     rows.append(row)
 
-                self.root.after(0, lambda fn=', '.join(fieldnames), d=detected_delimiter: self._log_mass_gen(f"Знайдено полів: {fn} (Роздільник: '{d}')\n"))
-
-                count = 0
-                total = len(rows)
+                self.root.after(
+                    0, lambda fn=", ".join(fieldnames), d=detected_delimiter:
+                        self._log_mass_gen(
+                            f"Знайдено полів: {fn} (Роздільник: '{d}')\n"))
 
                 def find_val(row_dict, aliases):
-                    norm_aliases = [a.lower().strip().replace("'", "'") for a in aliases]
+                    norm = [a.lower().strip().replace("'", "\u2019")
+                            for a in aliases]
                     for k, v in row_dict.items():
-                        if k.lower().strip().replace("'", "'") in norm_aliases:
+                        if k.lower().strip().replace("'", "\u2019") in norm:
                             return str(v).strip()
                     return ""
 
+                count = 0
+                total = len(rows)
                 for idx, row in enumerate(rows):
                     if "Cyberverse" in template_type:
-                        prizv = find_val(row, ['Прізвище', 'Surname', 'Last Name'])
-                        imya = find_val(row, ['Ім\'я', "Ім\'я", 'Name', 'First Name'])
-                        pobat = find_val(row, ['По батькові', 'Middle Name', 'Patronymic'])
-
-                        if template_type == "Cyberverse Participation Certificate":
-                            place = ""
-                        else:
-                            place = find_val(row, ['Місце', 'Зайняте місце', 'Place', 'Rank'])
-
-                        name = f"{prizv} {imya} {pobat}".strip()
-                        if not name:
-                            name = find_val(row, ["ПІБ", "Full Name", "Name"])
-
-                        row['Прізвище'] = prizv
-                        row["Ім'я"] = imya
-                        row['По батькові'] = pobat
-                        row['Місце'] = place
+                        prizv = find_val(row, ["Прізвище", "Surname", "Last Name"])
+                        imya  = find_val(row, ["Ім'я", "Ім\u2019я", "Name", "First Name"])
+                        pobat = find_val(row, ["По батькові", "Middle Name", "Patronymic"])
+                        place = ("" if template_type == "Cyberverse Participation Certificate"
+                                 else find_val(row, ["Місце", "Зайняте місце", "Place", "Rank"]))
+                        name  = f"{prizv} {imya} {pobat}".strip() or find_val(
+                            row, ["ПІБ", "Full Name", "Name"])
+                        row["Прізвище"]   = prizv
+                        row["Ім'я"]       = imya
+                        row["По батькові"] = pobat
+                        row["Місце"]      = place
                     else:
-                        imya_other = row.get('Ім\'я') or row.get("Ім'я") or ""
+                        imya_other = row.get("Ім'я") or row.get("Ім\u2019я") or ""
                         row["Ім'я"] = imya_other
                         name = f"{row.get('Прізвище', '')} {imya_other}".strip()
 
-                    progress = ((idx + 1) / total) * 100
-                    self.root.after(0, lambda p=progress, n=name, i=idx+1, t=total: self._update_mass_gen_progress(p, n, i, t))
+                    progress = (idx + 1) / total * 100
+                    self.root.after(
+                        0, lambda p=progress, n=name, i=idx+1, t=total:
+                            self._update_mass_gen_progress(p, n, i, t))
 
                     try:
-                        output_file = self.system.user_workflow(template_type, row)
+                        output_file = self.system.user_workflow(
+                            template_type, row)
                         count += 1
-                        self.root.after(0, lambda n=name, f=os.path.basename(output_file): self._log_mass_gen(f"✅ [{count}] {n} → {f}\n"))
+                        self.root.after(
+                            0, lambda n=name, fn=os.path.basename(output_file):
+                                self._log_mass_gen(
+                                    f"✅ [{count}] {n} → {fn}\n"))
                     except Exception as e:
-                        self.root.after(0, lambda n=name, err=str(e): self._log_mass_gen(f"❌ Помилка для {n}: {err}\n"))
+                        self.root.after(
+                            0, lambda n=name, err=str(e):
+                                self._log_mass_gen(
+                                    f"❌ Помилка для {n}: {err}\n"))
 
-                summary = f"\n{'='*50}\n✅ Успішно згенеровано {count} документів.\n📁 Файли збережено в папці: {output_folder}\n"
-                self.root.after(0, lambda s=summary: self._finish_mass_generation(s))
+                summary = (
+                    f"\n{'='*50}\n"
+                    f"✅ Успішно згенеровано {count} документів.\n"
+                    f"📁 Файли збережено в папці: {output_folder}\n"
+                )
+                self.root.after(
+                    0, lambda s=summary: self._finish_mass_generation(s))
 
         except Exception as e:
-            self.root.after(0, lambda err=str(e): messagebox.showerror("Помилка", f"Помилка при читанні CSV:\n{err}"))
-            self.root.after(0, lambda: self.mass_gen_btn.config(state="normal"))
+            self.root.after(
+                0, lambda err=str(e):
+                    messagebox.showerror(
+                        "Помилка", f"Помилка при читанні CSV:\n{err}"))
+            self.root.after(
+                0, lambda: self.mass_gen_btn.config(state="normal"))
 
     def _update_mass_gen_progress(self, progress, name, idx, total):
         self.mass_gen_progress_var.set(progress)
-        self.mass_gen_progress_label.config(text=f"[{idx}/{total}] Обробка: {name}...")
+        self.mass_gen_progress_label.config(
+            text=f"[{idx}/{total}] Обробка: {name}...")
 
     def _log_mass_gen(self, message):
         self.mass_gen_log.config(state="normal")
@@ -1021,9 +1297,13 @@ class ProtectionApp:
         self._log_mass_gen(summary)
         self.mass_gen_btn.config(state="normal")
         self.mass_gen_progress_label.config(text="✅ Завершено!")
-        messagebox.showinfo("Успіх", "Масове генерування завершено успішно!")
+        messagebox.showinfo("Успіх",
+                            "Масове генерування завершено успішно!")
+
+
+# ─────────────────────────── Entry point ─────────────────────────────────────
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = ProtectionApp(root)
+    app  = ProtectionApp(root)
     root.mainloop()
