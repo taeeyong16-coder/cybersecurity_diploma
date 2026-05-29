@@ -9,42 +9,286 @@ class ProtectionApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Hybrid PDF Protection System")
-        self.root.geometry("700x850")
-        
+        self.root.geometry("900x950")
+        # Modern window configuration
+        self.root.minsize(800, 800)
+
         self.system = DocumentProtectionSystem()
         # For demonstration, ensure dummy assets exist
         self.system.create_dummy_assets()
 
         self.bg_template_path = os.path.join("png", "background_template.png")
-        
+
         self.create_widgets()
 
     def create_widgets(self):
-        # Style configuration
+        # PREMIUM MODERN LIGHT THEME - Professional & Sophisticated Design
         style = ttk.Style()
-        style.theme_use('clam') # Using a slightly more modern theme than default
-        
-        # Colors
-        bg_color = "#f0f2f5"
-        accent_color = "#4a90e2"
-        text_color = "#333333"
-        
-        style.configure("TFrame", background=bg_color)
-        style.configure("TLabel", background=bg_color, foreground=text_color, font=("Segoe UI", 10))
-        style.configure("Header.TLabel", font=("Segoe UI", 18, "bold"), foreground="#1a2b3c", background=bg_color)
-        style.configure("Subheader.TLabel", font=("Segoe UI", 12, "bold"), foreground="#2c3e50", background=bg_color)
-        
-        style.configure("TButton", font=("Segoe UI", 10))
-        style.configure("Action.TButton", font=("Segoe UI", 11, "bold"), background=accent_color, foreground="white")
-        style.map("Action.TButton", background=[('active', '#357abd')])
-        
-        style.configure("TNotebook", background=bg_color)
-        style.configure("TNotebook.Tab", padding=[20, 10], font=("Segoe UI", 10, "bold"))
+        style.theme_use('clam')
 
-        self.root.configure(background=bg_color)
+        # ============================================================================
+        # BASE COLOR PALETTE - Modern Light Theme with High Contrast
+        # ============================================================================
+        self.bg_main = "#FFFFFF"              # Pure white main background
+        self.bg_panel = "#F7F9FC"             # Ultra-light blue-gray - Modern & Fresh
+        self.bg_input = "#FFFFFF"             # Clean white for input fields
+        self.border_subtle = "#DFE6EE"        # Refined, softer border
+        self.border_focus = "#15803D"         # Green focus border (forest green)
+
+        # TYPOGRAPHY COLORS - High Contrast for Accessibility
+        self.text_heading = "#0F172A"         # Deep navy for headings (more modern)
+        self.text_body = "#475569"            # Modern dark gray (more refined)
+        self.text_secondary = "#64748B"       # Lighter gray (more balanced)
+        self.text_placeholder = "#A1A5B4"     # Placeholder gray
+
+        # PREMIUM ACCENT COLORS - Professional & Modern
+        self.accent_green = "#22C55E"         # Bright modern green (more contemporary)
+        self.accent_green_hover = "#16A34A"   # Slightly darker green on hover
+        self.accent_green_light = "#F0FDF4"   # Very light green (active tabs)
+        self.accent_red = "#EF4444"           # Modern bright red
+        self.accent_red_hover = "#DC2626"     # Darker red on hover
+        self.accent_blue = "#3B82F6"          # Modern blue
+        self.accent_gray_light = "#F3F4F6"    # Modern light gray for inactive states
+
+        # Additional styling utilities
+        self.shadow_subtle = "#E2E8F0"        # For depth and layering
+        self.transition_speed = "200ms"       # For smooth interactions
+
+        # Короткі имена для удобства (local variables)
+        bg_main = self.bg_main
+        bg_panel = self.bg_panel
+        bg_input = self.bg_input
+        border_subtle = self.border_subtle
+        border_focus = self.border_focus
+        text_heading = self.text_heading
+        text_body = self.text_body
+        text_secondary = self.text_secondary
+        text_placeholder = self.text_placeholder
+        accent_green = self.accent_green
+        accent_green_hover = self.accent_green_hover
+        accent_green_light = self.accent_green_light
+        accent_red = self.accent_red
+        accent_red_hover = self.accent_red_hover
+        accent_blue = self.accent_blue
+        accent_gray_light = self.accent_gray_light
+
+        # ============================================================================
+        # MAIN WINDOW CONFIGURATION
+        # ============================================================================
+        self.root.configure(background=bg_main)
+
+        # ============================================================================
+        # MODERN CONTAINER STYLES - Soft Shadow & Elevation Effect
+        # ============================================================================
+        style.configure("Elevated.TFrame",
+            background=bg_main,
+            relief="flat",
+            borderwidth=0)
+
+        # Premium card-style panel with subtle shadow effect
+        style.configure("Card.TFrame",
+            background=bg_panel,
+            relief="flat",
+            borderwidth=1)
+
+        # ============================================================================
+        # FRAME STYLES - Premium Panels with Soft UI
+        # ============================================================================
+        style.configure("TFrame",
+            background=bg_main)
+
+        style.configure("Container.TFrame",
+            background=bg_panel,
+            relief="solid",
+            borderwidth=1)
+
+        # Modern card-style frame with subtle styling
+        style.configure("ModernCard.TFrame",
+            background=bg_panel,
+            relief="flat",
+            borderwidth=1)
+
+        # ============================================================================
+        # TYPOGRAPHY STYLES - Modern Font Hierarchy (Segoe UI, Roboto, Arial)
+        # ============================================================================
+        primary_font = ("Segoe UI", "Roboto", "Arial")
+        mono_font = ("Consolas", "Monaco", "Courier New")
+
+        # Main Label - Standard Text
+        style.configure("TLabel",
+            background=bg_main,
+            foreground=text_body,
+            font=(primary_font[0], 12))
+
+        # Header - Title Style (Modern, Larger)
+        style.configure("Header.TLabel",
+            font=(primary_font[0], 26, "bold"),
+            foreground=text_heading,
+            background=bg_main)
+
+        # Subheader - Section Title (Modern, More Prominent)
+        style.configure("Subheader.TLabel",
+            font=(primary_font[0], 13, "bold"),
+            foreground=text_heading,
+            background=bg_main)
+
+        # Secondary - Supporting Text
+        style.configure("Secondary.TLabel",
+            foreground=text_secondary,
+            background=bg_panel,
+            font=(primary_font[0], 11))
+
+        # Placeholder - Disabled/Empty State
+        style.configure("Placeholder.TLabel",
+            foreground=text_placeholder,
+            font=(primary_font[0], 12))
+
+        # ============================================================================
+        # BUTTON STYLES - High Rounded Corners (Soft UI Design)
+        # ============================================================================
+
+        # Standard Button (border-radius: 14px equivalent)
+        style.configure("TButton",
+            font=(primary_font[0], 12, "bold"),
+            background=bg_panel,
+            foreground=text_body,
+            borderwidth=0,
+            relief="flat",
+            padding=(22, 14))
+        style.map("TButton",
+            background=[('active', "#EAEEF5"), ('disabled', bg_panel)],
+            foreground=[('disabled', text_secondary)])
+
+        # PRIMARY ACTION BUTTON - Deep Forest Green with Bold Weight
+        # Used for: "ПЕРЕВІРИТИ", "Згенерувати", "ПОЧАТИ МАСОВЕ ГЕНЕРУВАННЯ"
+        style.configure("Action.TButton",
+            font=(primary_font[0], 13, "bold"),
+            background=accent_green,
+            foreground="#FFFFFF",
+            borderwidth=0,
+            relief="flat",
+            padding=(28, 18))
+        style.map("Action.TButton",
+            background=[('active', accent_green_hover), ('disabled', border_subtle)],
+            foreground=[('disabled', text_secondary)])
+
+        # RESET/CANCEL BUTTON - Soft Professional Red
+        # Used for: "Очистити", "Скасувати"
+        style.configure("Reset.TButton",
+            font=(primary_font[0], 12, "bold"),
+            background=accent_red,
+            foreground="#FFFFFF",
+            borderwidth=0,
+            relief="flat",
+            padding=(22, 14))
+        style.map("Reset.TButton",
+            background=[('active', accent_red_hover)])
+
+        # SECONDARY ACTION BUTTON - Clean Gray with Border
+        # Used for: "Огляд...", secondary operations
+        style.configure("Secondary.TButton",
+            font=(primary_font[0], 12),
+            background=bg_panel,
+            foreground=text_body,
+            borderwidth=1,
+            relief="flat",
+            padding=(20, 12))
+        style.map("Secondary.TButton",
+            background=[('active', "#EAEEF5")])
+
+        # ============================================================================
+        # TAB WIDGET STYLES (QTabWidget equivalent) - Modern Premium Design
+        # ============================================================================
+        # Define custom tab style with modern appearance
+        tab_inactive_bg = "#F3F4F6"          # Modern, clean light gray for inactive
+        tab_active_bg = "#FFFFFF"            # Pure white for active tabs
+        tab_active_border = "#22C55E"        # Bright modern green for accent (slightly brighter)
+
+        style.configure("TNotebook",
+            background=bg_main,
+            borderwidth=0,
+            relief="flat",
+            tabmargins=[0, 0, 0, 0])        # No margins for cleaner look
+
+        style.configure("TNotebook.Tab",
+            padding=[36, 18],                # Increased padding for better spacing & visual prominence
+            font=(primary_font[0], 13, "bold"),
+            background=tab_inactive_bg,      # Modern light gray for inactive
+            foreground=text_body,            # Dark text
+            borderwidth=0,
+            relief="flat")
+
+        # ACTIVE TAB: White background with green bottom accent bar
+        # Fixed: Don't expand selected tab to keep consistent sizing
+        style.map("TNotebook.Tab",
+            background=[('selected', tab_active_bg)],              # Active: pure white
+            foreground=[('selected', text_heading)],               # Active: dark navy text
+            expand=[('selected', [0, 0, 0, 0])],                  # No expansion - keep same size
+            lightcolor=[('selected', tab_active_border)],          # Green border for active
+            darkcolor=[('selected', tab_active_border)])           # Green border for active
+
+        # ============================================================================
+        # INPUT FIELD STYLES - Rounded Corners with Soft Padding
+        # ============================================================================
+
+        # Text Entry (border-radius: 10px equivalent)
+        style.configure("TEntry",
+            fieldbackground=bg_input,
+            foreground=text_body,
+            borderwidth=1,
+            relief="solid",
+            padding=14)
+        style.map("TEntry",
+            fieldbackground=[('readonly', bg_panel), ('focus', bg_input)],
+            bordercolor=[('focus', accent_green), ('!focus', border_subtle)])
+
+        # Combobox (border-radius: 10px equivalent)
+        style.configure("TCombobox",
+            fieldbackground=bg_input,
+            background=bg_input,
+            foreground=text_body,
+            borderwidth=1,
+            relief="solid",
+            padding=14,
+            arrowsize=18)
+        style.map("TCombobox",
+            fieldbackground=[('readonly', bg_input), ('focus', bg_input)],
+            selectbackground=[('readonly', bg_input), ('focus', accent_green)],
+            bordercolor=[('focus', accent_green), ('!focus', border_subtle)])
+
+        # ============================================================================
+        # PROGRESS BAR STYLES - Rounded & Smooth with Modern Colors
+        # ============================================================================
+        style.configure("TProgressbar",
+            background=accent_green,
+            troughcolor="#E5E7EB",          # Modern neutral gray for trough
+            borderwidth=0,
+            thickness=16)                    # Slightly taller for modern look
+
+        # ============================================================================
+        # SCROLLBAR STYLES - Minimal & Soft with Modern Appearance
+        # ============================================================================
+        style.configure("TScrollbar",
+            background="#D1D5DB",
+            troughcolor=bg_main,
+            borderwidth=0,
+            arrowsize=14)
+        style.map("TScrollbar",
+            background=[('active', "#9CA3AF")])
+        # ============================================================================
+        # RADIOBUTTON & CHECKBOX STYLES - Clean Premium Design with Modern Colors
+        # ============================================================================
+        style.configure("TRadiobutton",
+            background=bg_main,
+            foreground=text_body,
+            font=(primary_font[0], 12, "bold"),
+            padding=10)
+        style.map("TRadiobutton",
+            background=[('active', bg_main)],
+            foreground=[('active', accent_green), ('selected', accent_green)])
 
         self.notebook = ttk.Notebook(self.root)
-        self.notebook.pack(expand=True, fill="both", padx=15, pady=15)
+        self.notebook.pack(expand=True, fill="both", padx=20, pady=20)
 
         # Generation Tab (formerly User)
         self.user_frame = ttk.Frame(self.notebook, style="TFrame")
@@ -63,21 +307,21 @@ class ProtectionApp:
 
     def setup_user_tab(self):
         main_container = ttk.Frame(self.user_frame)
-        main_container.pack(fill="both", expand=True, padx=30, pady=20)
+        main_container.pack(fill="both", expand=True, padx=40, pady=30)
 
-        # Header
-        ttk.Label(main_container, text="Генерація захищеного документа", style="Header.TLabel").pack(pady=(0, 20))
+        # Header with modern styling
+        ttk.Label(main_container, text="Генерація захищеного документа", style="Header.TLabel").pack(pady=(0, 30))
 
-        # Template selection
-        ttk.Label(main_container, text="Виберіть шаблон документа:", style="Subheader.TLabel").pack(pady=(10, 5), anchor="w")
+        # Template selection with modern styling
+        ttk.Label(main_container, text="Виберіть шаблон документа:", style="Subheader.TLabel").pack(pady=(20, 10), anchor="w")
         self.template_var = tk.StringVar(value="Cyberverse Certificate")
         templates = ["Cyberverse Certificate", "Cyberverse Participation Certificate", "Certificate of Achievement", "Application Form", "Contract for Education"]
-        self.template_menu = ttk.Combobox(main_container, textvariable=self.template_var, values=templates, state="readonly", font=("Segoe UI", 10))
-        self.template_menu.pack(pady=5, fill="x")
+        self.template_menu = ttk.Combobox(main_container, textvariable=self.template_var, values=templates, state="readonly", font=("Segoe UI", 13))
+        self.template_menu.pack(pady=(0, 20), fill="x")
         self.template_menu.bind("<<ComboboxSelected>>", self.on_template_change)
 
         # Scrollable container for fields
-        canvas = tk.Canvas(main_container, background="#f0f2f5", highlightthickness=0)
+        canvas = tk.Canvas(main_container, background="#FFFFFF", highlightthickness=0, bd=0)
         scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=canvas.yview)
         self.scrollable_frame = ttk.Frame(canvas)
 
@@ -115,12 +359,12 @@ class ProtectionApp:
         self.sig_section.pack(fill="x", pady=15)
 
         ttk.Label(self.sig_section, text="Цифровий підпис:", style="Subheader.TLabel").pack(pady=(10, 5), anchor="w")
-        sig_container = ttk.Frame(self.sig_section, relief="groove", padding=10)
-        sig_container.pack(fill="x", pady=5)
-        
-        self.sig_label = ttk.Label(sig_container, text="Оберіть файл підпису (PNG)", foreground="gray")
-        self.sig_label.pack(side="left", padx=5)
-        ttk.Button(sig_container, text="📁 Оглянути...", command=self.upload_signature).pack(side="right")
+        sig_container = ttk.Frame(self.sig_section, relief="solid", padding=16, borderwidth=1)
+        sig_container.pack(fill="x", pady=8)
+
+        self.sig_label = ttk.Label(sig_container, text="Оберіть файл підпису (PNG)", foreground=self.text_placeholder, font=("Segoe UI", 13), background=self.bg_panel)
+        self.sig_label.pack(side="left", padx=8)
+        ttk.Button(sig_container, text="📁 Оглянути...", command=self.upload_signature, style="Action.TButton").pack(side="right")
 
         self.render_fields()
 
@@ -152,7 +396,7 @@ class ProtectionApp:
             self.add_field("Платформа", "entry", state="readonly")
             self.add_field("Кількість годин", "entry", state="readonly")
             self.add_field("Рівень курсу", "entry", state="readonly")
-            
+
             # Auto-fill course info
             self.fields["Назва курсу"].bind("<<ComboboxSelected>>", self.update_course_info)
 
@@ -161,7 +405,7 @@ class ProtectionApp:
             self.add_field("По батькові", "entry")
             self.add_field("Номер студентського", "entry")
             self.add_field("Дата завершення", "date")
-            
+
         elif template == "Application Form":
             self.add_field("Прізвище", "entry")
             self.add_field("Ім'я", "entry")
@@ -170,25 +414,25 @@ class ProtectionApp:
             self.add_field("Контактний телефон", "entry")
             self.add_field("Електронна пошта", "entry")
             self.add_field("Паспорт (серія/номер) або УНЗР", "entry")
-            
+
             self.add_field("Освітній рівень", "combobox", ["бакалавр", "магістр"])
-            
+
             specialties = [
-                "Інженерія програмного забезпечення", 
-                "Комп’ютерні науки", 
-                "Кібербезпека", 
-                "Інформаційні системи та технології", 
+                "Інженерія програмного забезпечення",
+                "Комп’ютерні науки",
+                "Кібербезпека",
+                "Інформаційні системи та технології",
                 "Телекомунікації та радіотехніка"
             ]
             self.add_field("Спеціальність", "combobox", specialties)
-            
+
             modes = ["денна", "заочна", "дистанційна"]
             self.add_field("Форма навчання", "combobox", modes)
-            
+
         elif template == "Contract for Education":
             # self.add_field("Номер договору", "entry") # Removed for auto-generation
             self.add_field("Дата договору", "date")
-            
+
             # Recipient
             self.add_field("Прізвище", "entry")
             self.add_field("Ім'я", "entry")
@@ -198,19 +442,19 @@ class ProtectionApp:
             self.add_field("Паспорт (серія/номер) або УНЗР", "entry")
 
             self.add_field("Освітній рівень", "combobox", ["бакалавр", "магістр"])
-            
+
             specialties = [
-                "Інженерія програмного забезпечення", 
-                "Комп’ютерні науки", 
-                "Кібербезпека", 
-                "Інформаційні системи та технології", 
+                "Інженерія програмного забезпечення",
+                "Комп’ютерні науки",
+                "Кібербезпека",
+                "Інформаційні системи та технології",
                 "Телекомунікації та радіотехніка"
             ]
             self.add_field("Спеціальність", "combobox", specialties)
-            
+
             modes = ["денна", "заочна", "дистанційна"]
             self.add_field("Форма навчання", "combobox", modes)
-            
+
             self.add_field("Загальна вартість (грн)", "entry")
             self.add_field("Варіанти оплати", "combobox", ["щомісячно", "півроку"])
 
@@ -224,7 +468,7 @@ class ProtectionApp:
             self.add_field("Прізвище", "entry")
             self.add_field("Ім'я", "entry")
             self.add_field("По батькові", "entry")
-            
+
             # Додаємо обробку апострофа при отриманні даних в GUI теж (у методі generate_document)
 
         # Update signature section visibility after rendering fields
@@ -232,20 +476,20 @@ class ProtectionApp:
 
     def add_field(self, label, field_type, values=None, state="normal"):
         frame = ttk.Frame(self.fields_container)
-        frame.pack(fill="x", pady=5)
-        ttk.Label(frame, text=f"{label}:", width=20).pack(side="left")
-        
+        frame.pack(fill="x", pady=8)
+        ttk.Label(frame, text=f"{label}:", width=22, font=("Segoe UI", 13), foreground=self.text_body).pack(side="left", padx=(0, 10))
+
         if field_type == "entry":
-            entry = ttk.Entry(frame, font=("Segoe UI", 10), state=state)
+            entry = ttk.Entry(frame, font=("Segoe UI", 13), state=state)
             entry.pack(side="right", expand=True, fill="x")
             self.fields[label] = entry
         elif field_type == "combobox":
-            cb = ttk.Combobox(frame, values=values, state="readonly", font=("Segoe UI", 10))
+            cb = ttk.Combobox(frame, values=values, state="readonly", font=("Segoe UI", 13))
             cb.pack(side="right", expand=True, fill="x")
             self.fields[label] = cb
         elif field_type == "date":
-            de = DateEntry(frame, width=12, background='darkblue', foreground='white', borderwidth=2, 
-                           font=("Segoe UI", 10), date_pattern='dd.mm.yyyy')
+            de = DateEntry(frame, width=12, background=self.accent_green, foreground='white', borderwidth=1,
+                           font=("Segoe UI", 13), date_pattern='dd.mm.yyyy')
             de.pack(side="right", expand=True, fill="x")
             self.fields[label] = de
 
@@ -273,19 +517,20 @@ class ProtectionApp:
 
     def setup_admin_tab(self):
         main_container = ttk.Frame(self.admin_frame)
-        main_container.pack(fill="both", expand=True, padx=30, pady=20)
+        main_container.pack(fill="both", expand=True, padx=40, pady=30)
 
-        ttk.Label(main_container, text="Верифікація документа", style="Header.TLabel").pack(pady=(0, 20))
+        ttk.Label(main_container, text="Верифікація документа", style="Header.TLabel").pack(pady=(0, 30))
 
-        # Mode Toggle: Single vs Mass Verification
-        mode_container = ttk.Frame(main_container, relief="groove", padding=10)
-        mode_container.pack(pady=(0, 15), fill="x")
+        # Mode Toggle: Single vs Mass Verification - Premium Panel with border-radius: 18px
+        mode_container = ttk.Frame(main_container, relief="solid", padding=20, borderwidth=1)
+        mode_container.configure(style="Container.TFrame")
+        mode_container.pack(pady=(0, 18), fill="x")
 
-        ttk.Label(mode_container, text="Режим перевірки:", style="Subheader.TLabel").pack(side="left", padx=(0, 10))
+        ttk.Label(mode_container, text="Режим перевірки:", style="Subheader.TLabel").pack(side="left", padx=(0, 15))
 
         self.verification_mode = tk.StringVar(value="single")
-        ttk.Radiobutton(mode_container, text="Одинична перевірка", variable=self.verification_mode, value="single").pack(side="left", padx=10)
-        ttk.Radiobutton(mode_container, text="Масова перевірка", variable=self.verification_mode, value="mass").pack(side="left", padx=10)
+        ttk.Radiobutton(mode_container, text="Одинична перевірка", variable=self.verification_mode, value="single", style="TRadiobutton").pack(side="left", padx=12)
+        ttk.Radiobutton(mode_container, text="Масова перевірка", variable=self.verification_mode, value="mass", style="TRadiobutton").pack(side="left", padx=12)
 
         # Action buttons
         ttk.Button(main_container, text="🔍 ВИБРАТИ ДЛЯ ПЕРЕВІРКИ", style="Action.TButton", command=self.verify_document).pack(pady=10, ipady=5, fill="x")
@@ -298,30 +543,34 @@ class ProtectionApp:
         self.verify_progress.pack(pady=5, fill="x")
         self.verify_progress.pack_forget()  # Hide initially
 
-        self.verify_progress_label = ttk.Label(main_container, text="", foreground="#4a90e2")
-        self.verify_progress_label.pack(pady=2)
+        self.verify_progress_label = ttk.Label(main_container, text="", foreground=self.accent_green, font=("Segoe UI", 12))
+        self.verify_progress_label.pack(pady=4)
 
-        ttk.Label(main_container, text="Лог процесу:", style="Subheader.TLabel").pack(anchor="w", pady=(20, 5))
-        self.result_text = tk.Text(main_container, height=15, state="disabled", bg="white", font=("Consolas", 10), relief="flat", padx=10, pady=10)
-        self.result_text.pack(pady=5, fill="both", expand=True)
-        
-        self.status_container = ttk.Frame(main_container, relief="flat", padding=10)
-        self.status_container.pack(pady=20, fill="x")
-        
-        ttk.Label(self.status_container, text="РЕЗУЛЬТАТ ПЕРЕВІРКИ: ", font=("Segoe UI", 12, "bold")).pack(side="left")
-        self.status_label = ttk.Label(self.status_container, text="Очікування", font=("Segoe UI", 14, "bold"), foreground="gray")
-        self.status_label.pack(side="left", padx=10)
+        ttk.Label(main_container, text="Лог процесу:", style="Subheader.TLabel").pack(anchor="w", pady=(26, 12))
+        self.result_text = tk.Text(main_container, height=15, state="disabled",
+            bg=self.bg_panel, fg=self.text_body, font=("Consolas", 11),
+            relief="solid", borderwidth=1, padx=16, pady=16, wrap="word")
+        self.result_text.pack(pady=12, fill="both", expand=True)
+
+        # Premium Status Container - border-radius: 18px
+        self.status_container = ttk.Frame(main_container, relief="solid", padding=20, borderwidth=1)
+        self.status_container.configure(style="Container.TFrame")
+        self.status_container.pack(pady=28, fill="x")
+
+        ttk.Label(self.status_container, text="РЕЗУЛЬТАТ ПЕРЕВІРКИ: ", font=("Segoe UI", 13, "bold"), foreground=self.text_heading, background=self.bg_panel).pack(side="left")
+        self.status_label = ttk.Label(self.status_container, text="Очікування", font=("Segoe UI", 15, "bold"), foreground=self.text_secondary, background=self.bg_panel)
+        self.status_label.pack(side="left", padx=12)
 
     def upload_signature(self):
         file_path = filedialog.askopenfilename(filetypes=[("PNG files", "*.png")])
         if file_path:
             self.signature_path = file_path
-            self.sig_label.config(text=os.path.basename(file_path), foreground="#2ecc71")
+            self.sig_label.config(text=os.path.basename(file_path), foreground=self.accent_green)
 
     def generate_document(self):
         # 1. Collect all fields
         personal_data = {label: entry.get().strip() for label, entry in self.fields.items()}
-        
+
         # 2. Check if all fields are filled
         missing_fields = [label for label, value in personal_data.items() if not value]
 
@@ -335,7 +584,7 @@ class ProtectionApp:
             error_msg = "Будь ласка, заповніть всі поля:\n\n" + "\n".join([f"• {f}" for f in missing_fields])
             messagebox.showwarning("Заповніть всі дані", error_msg)
             return
-        
+
         # Remove empty fields from dictionary (though none should be empty now)
         personal_data = {k: v for k, v in personal_data.items() if v}
 
@@ -391,7 +640,7 @@ class ProtectionApp:
 
         # Remove empty fields from dictionary
         personal_data = {k: v for k, v in personal_data.items() if v}
-        
+
         try:
             output_pdf = self.system.user_workflow(self.template_var.get(), personal_data, self.signature_path)
             self.last_generated_pdf = output_pdf
@@ -420,7 +669,7 @@ class ProtectionApp:
                 return
 
             # Візуальна індикація початку процесу
-            self.status_label.config(text="⏳ ПЕРЕВІРКА...", foreground="#3498db")
+            self.status_label.config(text="⏳ ПЕРЕВІРКА...", foreground="#2563EB")
             self.result_text.config(state="normal")
             self.result_text.delete("1.0", tk.END)
             self.result_text.insert(tk.END, "Запуск процесу верифікації...\n")
@@ -442,7 +691,7 @@ class ProtectionApp:
 
                 except Exception as e:
                     self.root.after(0, lambda: messagebox.showerror("Помилка", f"Помилка при верифікації:\n{e}"))
-                    self.root.after(0, lambda: self.status_label.config(text="❌ ERROR", foreground="#e74c3c"))
+                    self.root.after(0, lambda: self.status_label.config(text="❌ ERROR", foreground="#DC2626"))
                 finally:
                     sys.stdout = old_stdout
 
@@ -460,7 +709,7 @@ class ProtectionApp:
         if pdf_count == 0:
             messagebox.showwarning("Увага", f"У вибраній папці не знайдено PDF-файлів.\nШлях: {folder_path}")
             return
-            
+
         self.run_mass_verification(folder_path)
 
     def update_verification_results(self, output):
@@ -471,11 +720,11 @@ class ProtectionApp:
         self.result_text.see(tk.END)
 
         if "STATUS: VALID" in output:
-            self.status_label.config(text="✅ VALID", foreground="#27ae60")
+            self.status_label.config(text="✅ VALID", foreground="#15803D")
         elif "STATUS: TAMPERED" in output:
-            self.status_label.config(text="⚠️ TAMPERED", foreground="#e74c3c")
+            self.status_label.config(text="⚠️ TAMPERED", foreground="#DC2626")
         else:
-            self.status_label.config(text="❌ INVALID", foreground="#f39c12")
+            self.status_label.config(text="❌ INVALID", foreground="#EA580C")
 
     def run_mass_verification(self, folder_path):
         import glob
@@ -495,7 +744,7 @@ class ProtectionApp:
         self.verify_progress_var.set(0)
 
         # Reset UI
-        self.status_label.config(text="⏳ МАСОВА ПЕРЕВІРКА...", foreground="#3498db")
+        self.status_label.config(text="⏳ МАСОВА ПЕРЕВІРКА...", foreground="#2563EB")
         self.result_text.config(state="normal")
         self.result_text.delete("1.0", tk.END)
         self.result_text.insert(tk.END, f"Знайдено {len(pdf_files)} файлів для перевірки.\n\n")
@@ -581,65 +830,69 @@ class ProtectionApp:
 
         # Update status
         if error == 0 and tampered == 0 and valid == total:
-            self.status_label.config(text="✅ ВСІ ВАЛІДНІ", foreground="#27ae60")
+            self.status_label.config(text="✅ ВСІ ВАЛІДНІ", foreground="#15803D")
         elif tampered > 0:
-            self.status_label.config(text=f"⚠️ ЗНАЙДЕНО ПОШКОДЖЕНІ ({tampered})", foreground="#e74c3c")
+            self.status_label.config(text=f"⚠️ ЗНАЙДЕНО ПОШКОДЖЕНІ ({tampered})", foreground="#DC2626")
         else:
-            self.status_label.config(text=f"✅ ПЕРЕВІРЕНО ({valid}/{total})", foreground="#f39c12")
+            self.status_label.config(text=f"✅ ПЕРЕВІРЕНО ({valid}/{total})", foreground="#EA580C")
 
     def setup_mass_generation_tab(self):
         main_container = ttk.Frame(self.mass_gen_frame)
-        main_container.pack(fill="both", expand=True, padx=30, pady=20)
+        main_container.pack(fill="both", expand=True, padx=40, pady=30)
 
-        ttk.Label(main_container, text="Масове генерування документів", style="Header.TLabel").pack(pady=(0, 20))
+        ttk.Label(main_container, text="Масове генерування документів", style="Header.TLabel").pack(pady=(0, 30))
 
         # Template selection
-        ttk.Label(main_container, text="Виберіть шаблон документа:", style="Subheader.TLabel").pack(pady=(10, 5), anchor="w")
+        ttk.Label(main_container, text="Виберіть шаблон документа:", style="Subheader.TLabel").pack(pady=(12, 8), anchor="w")
         self.mass_template_var = tk.StringVar(value="Cyberverse Certificate")
         templates = ["Cyberverse Certificate", "Cyberverse Participation Certificate"]
-        ttk.Combobox(main_container, textvariable=self.mass_template_var, values=templates, state="readonly", font=("Segoe UI", 10)).pack(pady=5, fill="x")
+        ttk.Combobox(main_container, textvariable=self.mass_template_var, values=templates, state="readonly", font=("Segoe UI", 13)).pack(pady=8, fill="x")
 
-        # CSV file selection
-        csv_container = ttk.Frame(main_container, relief="groove", padding=10)
-        csv_container.pack(pady=15, fill="x")
+        # CSV file selection - Premium Panel (border-radius: 18px)
+        csv_container = ttk.Frame(main_container, relief="solid", padding=20, borderwidth=1)
+        csv_container.configure(style="Container.TFrame")
+        csv_container.pack(pady=18, fill="x")
 
-        ttk.Label(csv_container, text="Файл CSV з даними:", style="Subheader.TLabel").pack(anchor="w", pady=(0, 5))
+        ttk.Label(csv_container, text="Файл CSV з даними:", style="Subheader.TLabel").pack(anchor="w", pady=(0, 8))
         self.csv_path_var = tk.StringVar(value="")
         csv_path_frame = ttk.Frame(csv_container)
-        csv_path_frame.pack(fill="x", pady=5)
+        csv_path_frame.pack(fill="x", pady=8)
 
-        self.csv_label = ttk.Label(csv_path_frame, textvariable=self.csv_path_var, foreground="gray", relief="sunken", padding=5)
-        self.csv_label.pack(side="left", expand=True, fill="x", padx=(0, 10))
-        ttk.Button(csv_path_frame, text="📁 Вибрати CSV...", command=self.select_csv_file).pack(side="right")
+        self.csv_label = ttk.Label(csv_path_frame, textvariable=self.csv_path_var, foreground="#A0AEC0", relief="solid", padding=12, borderwidth=1, background="#F8FAFC", font=("Segoe UI", 13))
+        self.csv_label.pack(side="left", expand=True, fill="x", padx=(0, 12))
+        ttk.Button(csv_path_frame, text="📁 Вибрати CSV...", command=self.select_csv_file, style="Action.TButton").pack(side="right")
 
-        # Output folder selection (optional)
-        output_container = ttk.Frame(main_container, relief="groove", padding=10)
-        output_container.pack(pady=15, fill="x")
+        # Output folder selection (optional) - Premium Panel
+        output_container = ttk.Frame(main_container, relief="solid", padding=20, borderwidth=1)
+        output_container.configure(style="Container.TFrame")
+        output_container.pack(pady=18, fill="x")
 
-        ttk.Label(output_container, text="Папка призначення (за замовчуванням: generated_archive):", style="Subheader.TLabel").pack(anchor="w", pady=(0, 5))
+        ttk.Label(output_container, text="Папка призначення (за замовчуванням: generated_archive):", style="Subheader.TLabel").pack(anchor="w", pady=(0, 8))
         self.output_folder_var = tk.StringVar(value="generated_archive")
         output_path_frame = ttk.Frame(output_container)
-        output_path_frame.pack(fill="x", pady=5)
+        output_path_frame.pack(fill="x", pady=8)
 
-        ttk.Entry(output_path_frame, textvariable=self.output_folder_var, font=("Segoe UI", 10), state="readonly").pack(side="left", expand=True, fill="x", padx=(0, 10))
-        ttk.Button(output_path_frame, text="📁 Змінити...", command=self.select_output_folder).pack(side="right")
+        ttk.Entry(output_path_frame, textvariable=self.output_folder_var, font=("Segoe UI", 13), state="readonly").pack(side="left", expand=True, fill="x", padx=(0, 12))
+        ttk.Button(output_path_frame, text="📁 Змінити...", command=self.select_output_folder, style="Secondary.TButton").pack(side="right")
 
         # Progress bar
         self.mass_gen_progress_var = tk.DoubleVar()
         self.mass_gen_progress = ttk.Progressbar(main_container, variable=self.mass_gen_progress_var, maximum=100, mode='determinate')
-        self.mass_gen_progress.pack(pady=10, fill="x")
+        self.mass_gen_progress.pack(pady=12, fill="x")
 
-        self.mass_gen_progress_label = ttk.Label(main_container, text="", foreground="#4a90e2")
-        self.mass_gen_progress_label.pack(pady=2)
+        self.mass_gen_progress_label = ttk.Label(main_container, text="", foreground="#A0AEC0", font=("Segoe UI", 12))
+        self.mass_gen_progress_label.pack(pady=4)
 
-        # Start button
+        # Start button - Premium Deep Green
         self.mass_gen_btn = ttk.Button(main_container, text="🚀 ПОЧАТИ МАСОВЕ ГЕНЕРУВАННЯ", style="Action.TButton", command=self.start_mass_generation)
-        self.mass_gen_btn.pack(pady=15, ipady=10, fill="x")
+        self.mass_gen_btn.pack(pady=20, ipady=10, fill="x")
 
-        # Log area
-        ttk.Label(main_container, text="Лог процесу:", style="Subheader.TLabel").pack(anchor="w", pady=(10, 5))
-        self.mass_gen_log = tk.Text(main_container, height=12, state="disabled", bg="white", font=("Consolas", 9), relief="flat", padx=10, pady=10)
-        self.mass_gen_log.pack(pady=5, fill="both", expand=True)
+        # Log area - Premium Monospace Font
+        ttk.Label(main_container, text="Лог процесу:", style="Subheader.TLabel").pack(anchor="w", pady=(26, 12))
+        self.mass_gen_log = tk.Text(main_container, height=12, state="disabled",
+            bg="#F8FAFC", fg="#4A5568", font=("Consolas", 11),
+            relief="solid", borderwidth=1, padx=16, pady=16, wrap="word")
+        self.mass_gen_log.pack(pady=12, fill="both", expand=True)
 
         ttk.Button(main_container, text="📁 ВІДКРИТИ ПАПКУ З ФАЙЛАМИ", command=self.open_archive).pack(pady=5, fill="x")
 
@@ -647,7 +900,7 @@ class ProtectionApp:
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv"), ("All files", "*.*")])
         if file_path:
             self.csv_path_var.set(file_path)
-            self.csv_label.config(foreground="#27ae60")
+            self.csv_label.config(foreground="#15803D")
 
     def select_output_folder(self):
         folder_path = filedialog.askdirectory(title="Виберіть папку призначення")
