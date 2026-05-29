@@ -25,23 +25,31 @@ class PDFProcessor:
             r"C:\Windows\Fonts\arial.ttf",
             r"C:\Windows\Fonts\segoeui.ttf",
             r"C:\Windows\Fonts\tahoma.ttf"
+            r"/Library/Fonts/Arial.ttf",
+            r"/System/Library/Fonts/Supplemental/Arial.ttf",
+            r"/System/Library/Fonts/Supplemental/Tahoma.ttf"
         ]
-        
+
         for path in font_paths:
             if os.path.exists(path):
                 try:
                     pdfmetrics.registerFont(TTFont('UnicodeFont', path))
-                    # Also register bold version if available
+
+                    # Шукаємо жирний шрифт
                     bold_path = path.replace(".ttf", "bd.ttf")
+                    # На macOS жирний Arial часто називається інакше
+                    if not os.path.exists(bold_path) and "Arial.ttf" in path:
+                        bold_path = path.replace("Arial.ttf", "Arial Bold.ttf")
+
                     if os.path.exists(bold_path):
                         pdfmetrics.registerFont(TTFont('UnicodeFontBold', bold_path))
                         self.font_bold = 'UnicodeFontBold'
                     else:
                         self.font_bold = 'UnicodeFont'
-                        
+
                     self.font_name = 'UnicodeFont'
-                    break
-                except:
+                    break 
+                except Exception as e:
                     continue
 
         # Register monospaced font for Cyrillic support
